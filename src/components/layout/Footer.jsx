@@ -1,13 +1,16 @@
 import { Mail, MapPin, Phone } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { useStorefrontSettings } from "../../context/StorefrontSettingsContext";
 
 function Footer() {
+  const { settings } = useStorefrontSettings();
+
   return (
     <footer className="mt-16 border-t border-slate-200 bg-white">
       <div className="container-pad grid gap-10 py-12 md:grid-cols-2 lg:grid-cols-5">
         <div className="lg:col-span-2">
           <NavLink to="/" className="font-display text-2xl font-bold text-brand">
-            Woodmart.lk
+            {settings.storeName}
           </NavLink>
           <p className="mt-4 max-w-md text-sm text-muted">
             Premium wooden and lifestyle essentials designed for curated homes.
@@ -50,13 +53,13 @@ function Footer() {
           <h4 className="font-semibold text-ink">Get in Touch</h4>
           <ul className="mt-4 space-y-3 text-sm text-muted">
             <li className="inline-flex items-start gap-2">
-              <MapPin size={16} className="mt-0.5" /> 224 Artisan Street, New York
+              <MapPin size={16} className="mt-0.5" /> {settings.storeAddress || "224 Artisan Street, New York"}
             </li>
             <li className="inline-flex items-center gap-2">
-              <Phone size={16} /> +1 (212) 555-0193
+              <Phone size={16} /> {settings.contactNumber || "+1 (212) 555-0193"}
             </li>
             <li className="inline-flex items-center gap-2">
-              <Mail size={16} /> support@atelieroak.com
+              <Mail size={16} /> {settings.supportEmail || "support@atelieroak.com"}
             </li>
           </ul>
           <div className="mt-5 rounded-lg bg-brand-light p-3">
@@ -78,7 +81,7 @@ function Footer() {
       </div>
       <div className="border-t border-slate-200 py-4">
         <p className="container-pad text-xs text-muted">
-          Copyright {new Date().getFullYear()} Woodmart.lk. All rights reserved.
+          Copyright {new Date().getFullYear()} {settings.storeName}. All rights reserved.
         </p>
       </div>
     </footer>

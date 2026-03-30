@@ -116,6 +116,25 @@ function ProductsPage() {
             render: (row) => `Rs. ${Number(row.price || 0).toFixed(2)}`,
           },
           {
+            key: "discountPrice",
+            title: "Discount",
+            render: (row) => {
+              const discountPrice = Number(row.discountPrice || 0);
+              if (!discountPrice) return "-";
+              return `Rs. ${discountPrice.toFixed(2)}`;
+            },
+          },
+          {
+            key: "productCost",
+            title: "Cost",
+            render: (row) => `Rs. ${Number(row.productCost || 0).toFixed(2)}`,
+          },
+          {
+            key: "shippingPrice",
+            title: "Shipping",
+            render: (row) => `Rs. ${Number(row.shippingPrice || 0).toFixed(2)}`,
+          },
+          {
             key: "stock",
             title: "Stock",
             render: (row) => row.countInStock ?? row.stock ?? 0,

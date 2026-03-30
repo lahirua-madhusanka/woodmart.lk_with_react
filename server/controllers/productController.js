@@ -15,7 +15,7 @@ const calculateRating = (reviews = []) => {
 };
 
 const productSelect =
-  "id, name, description, price, discount_price, category, stock, rating, created_at, updated_at, product_images(image_url, sort_order), product_reviews(id, user_id, name, rating, comment, created_at, updated_at)";
+  "id, name, description, price, discount_price, product_cost, shipping_price, category, stock, rating, created_at, updated_at, product_images(image_url, sort_order), product_reviews(id, user_id, name, rating, comment, created_at, updated_at)";
 
 export const getProducts = asyncHandler(async (req, res) => {
   const { category, q, sort } = req.query;
@@ -75,6 +75,8 @@ export const createProduct = asyncHandler(async (req, res) => {
     price,
     discountPrice,
     category,
+    productCost = 0,
+    shippingPrice = 0,
     images = [],
     stock = 0,
     rating = 0,
@@ -105,6 +107,8 @@ export const createProduct = asyncHandler(async (req, res) => {
     price,
     discount_price: discountPrice ?? null,
     category,
+    product_cost: Number(productCost || 0),
+    shipping_price: Number(shippingPrice || 0),
     stock,
     rating,
     sku: sku || null,
@@ -128,6 +132,8 @@ export const createProduct = asyncHandler(async (req, res) => {
         price,
         discount_price: discountPrice ?? null,
         category,
+        product_cost: Number(productCost || 0),
+        shipping_price: Number(shippingPrice || 0),
         stock,
         rating,
       })
@@ -191,6 +197,8 @@ export const updateProduct = asyncHandler(async (req, res) => {
   if (req.body.price !== undefined) payload.price = req.body.price;
   if (req.body.discountPrice !== undefined) payload.discount_price = req.body.discountPrice;
   if (req.body.category !== undefined) payload.category = req.body.category;
+  if (req.body.productCost !== undefined) payload.product_cost = Number(req.body.productCost || 0);
+  if (req.body.shippingPrice !== undefined) payload.shipping_price = Number(req.body.shippingPrice || 0);
   if (req.body.stock !== undefined) payload.stock = req.body.stock;
   if (req.body.rating !== undefined) payload.rating = req.body.rating;
   if (req.body.sku !== undefined) payload.sku = req.body.sku || null;
@@ -219,6 +227,8 @@ export const updateProduct = asyncHandler(async (req, res) => {
     delete fallbackPayload.brand;
     delete fallbackPayload.featured;
     delete fallbackPayload.status;
+    delete fallbackPayload.product_cost;
+    delete fallbackPayload.shipping_price;
 
     ({ error: updateError } = await supabase
       .from("products")

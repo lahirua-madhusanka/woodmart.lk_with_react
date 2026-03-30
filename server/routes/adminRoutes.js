@@ -6,9 +6,12 @@ import {
   deleteUserAdmin,
   getAdminCategories,
   getAdminDashboardStats,
+  getAdminProfitReport,
   getAdminReviews,
+  getAdminSettings,
   getAllOrdersAdmin,
   getAllUsersAdmin,
+  updateAdminSettings,
   updateOrderStatusAdmin,
   updateUserRoleAdmin,
 } from "../controllers/adminController.js";
@@ -20,6 +23,43 @@ const router = express.Router();
 router.use(protect, adminOnly);
 
 router.get("/stats", getAdminDashboardStats);
+router.get("/profit-report", getAdminProfitReport);
+router.get("/settings", getAdminSettings);
+router.put(
+  "/settings",
+  [
+    body("storeName")
+      .trim()
+      .notEmpty()
+      .withMessage("Store name is required")
+      .isLength({ max: 120 })
+      .withMessage("Store name must be at most 120 characters"),
+    body("supportEmail")
+      .custom((value) => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value)))
+      .withMessage("Support email must be a valid email address"),
+    body("contactNumber")
+      .custom((value) => !value || String(value).length <= 50)
+      .withMessage("Contact number must be at most 50 characters"),
+    body("storeAddress")
+      .custom((value) => !value || String(value).length <= 255)
+      .withMessage("Store address must be at most 255 characters"),
+    body("currency")
+      .trim()
+      .notEmpty()
+      .withMessage("Currency is required")
+      .isLength({ max: 10 })
+      .withMessage("Currency must be at most 10 characters"),
+    body("freeShippingThreshold")
+      .isFloat({ min: 0 })
+      .withMessage("Free shipping threshold must be a non-negative number"),
+    body("themeAccent")
+      .trim()
+      .isLength({ min: 4, max: 20 })
+      .withMessage("Theme accent is required"),
+  ],
+  validateRequest,
+  updateAdminSettings
+);
 
 router.get("/orders", getAllOrdersAdmin);
 router.put(

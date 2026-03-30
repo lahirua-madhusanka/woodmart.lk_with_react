@@ -44,12 +44,11 @@ export const mockCoupons = [
 
 export const mockSettings = {
   storeName: "Woodmart.lk",
-  adminEmail: "admin@atelieroak.com",
+  supportEmail: "support@atelieroak.com",
   contactNumber: "+1 (212) 555-0193",
+  storeAddress: "224 Artisan Street, New York",
   currency: "Rs.",
-  deliveryFee: 18,
   freeShippingThreshold: 199,
-  taxRate: 8,
   themeAccent: "#0959a4",
 };
 

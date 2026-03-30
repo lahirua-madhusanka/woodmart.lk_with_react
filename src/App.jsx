@@ -29,9 +29,11 @@ const AdminDashboardPage = lazy(() => import("./admin/pages/DashboardPage"));
 const AdminProductsPage = lazy(() => import("./admin/pages/ProductsPage"));
 const AdminProductFormPage = lazy(() => import("./admin/pages/ProductFormPage"));
 const AdminOrdersPage = lazy(() => import("./admin/pages/OrdersPage"));
+const AdminProfitPage = lazy(() => import("./admin/pages/ProfitReportPage"));
 const AdminCustomersPage = lazy(() => import("./admin/pages/CustomersPage"));
 const AdminCategoriesPage = lazy(() => import("./admin/pages/CategoriesPage"));
 const AdminReviewsPage = lazy(() => import("./admin/pages/ReviewsPage"));
+const AdminMessagesPage = lazy(() => import("./admin/pages/MessagesPage"));
 const AdminBannersPage = lazy(() => import("./admin/pages/BannersPage"));
 const AdminCouponsPage = lazy(() => import("./admin/pages/CouponsPage"));
 const AdminSettingsPage = lazy(() => import("./admin/pages/SettingsPage"));
@@ -58,9 +60,11 @@ function App() {
         <Route path="products/add" element={withSuspense(<AdminProductFormPage />, "Loading product form...")} />
         <Route path="products/edit/:id" element={withSuspense(<AdminProductFormPage />, "Loading product form...")} />
         <Route path="orders" element={withSuspense(<AdminOrdersPage />, "Loading orders...")} />
+        <Route path="profit" element={withSuspense(<AdminProfitPage />, "Loading profit report...")} />
         <Route path="customers" element={withSuspense(<AdminCustomersPage />, "Loading customers...")} />
         <Route path="categories" element={withSuspense(<AdminCategoriesPage />, "Loading categories...")} />
         <Route path="reviews" element={withSuspense(<AdminReviewsPage />, "Loading reviews...")} />
+        <Route path="messages" element={withSuspense(<AdminMessagesPage />, "Loading messages...")} />
         <Route path="banners" element={withSuspense(<AdminBannersPage />, "Loading banners...")} />
         <Route path="coupons" element={withSuspense(<AdminCouponsPage />, "Loading coupons...")} />
         <Route path="settings" element={withSuspense(<AdminSettingsPage />, "Loading settings...")} />

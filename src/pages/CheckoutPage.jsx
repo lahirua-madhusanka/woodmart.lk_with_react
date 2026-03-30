@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../context/AuthContext";
+import { useStorefrontSettings } from "../context/StorefrontSettingsContext";
 import { useStore } from "../context/StoreContext";
 import { getApiErrorMessage } from "../services/apiClient";
 import {
@@ -46,7 +47,8 @@ function CheckoutInner({ stripeEnabled }) {
   const elements = useElements();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { cartDetailedItems, cartSubtotal } = useStore();
+  const { formatMoney } = useStorefrontSettings();
+  const { cartDetailedItems, cartSubtotal, cartShippingTotal, cartDiscountTotal } = useStore();
 
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [placingOrder, setPlacingOrder] = useState(false);
@@ -57,11 +59,10 @@ function CheckoutInner({ stripeEnabled }) {
   const [saveForFuture, setSaveForFuture] = useState(false);
   const [address, setAddress] = useState({ ...emptyAddress });
 
-  const shippingCost = useMemo(
-    () => (cartSubtotal > 199 || cartSubtotal === 0 ? 0 : 18),
-    [cartSubtotal]
+  const total = useMemo(
+    () => Number(cartSubtotal || 0) + Number(cartShippingTotal || 0),
+    [cartShippingTotal, cartSubtotal]
   );
-  const total = cartSubtotal + shippingCost;
 
   useEffect(() => {
     let ignore = false;
@@ -466,24 +467,31 @@ function CheckoutInner({ stripeEnabled }) {
           <h2 className="text-lg font-semibold text-ink">Order Summary</h2>
           <div className="mt-4 space-y-3">
             {cartDetailedItems.map((item) => {
-              const unitPrice = Number(item.discountPrice || item.price || 0);
+              const unitPrice = Number(item.unitPrice ?? item.discountPrice ?? item.price ?? 0);
+              const listPrice = Number(item.listPrice ?? item.price ?? unitPrice);
+              const unitDiscount = Number(item.unitDiscountAmount || 0);
+              const unitShipping = Number(item.unitShippingPrice || 0);
               return (
                 <article key={item.productId} className="flex gap-3 border-b border-slate-100 pb-3">
                   <img src={item.images?.[0] || item.image} alt={item.name} className="h-14 w-14 rounded-lg object-cover" />
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm font-semibold text-ink">{item.name}</p>
-                    <p className="text-xs text-muted">Qty: {item.quantity} x Rs. {unitPrice.toFixed(2)}</p>
+                    <p className="text-xs text-muted">Qty: {item.quantity}</p>
+                    <p className="text-xs text-muted">Item price: {formatMoney(unitPrice)} {unitDiscount > 0 ? `(discounted from ${formatMoney(listPrice)})` : ""}</p>
+                    <p className="text-xs text-muted">Shipping: {formatMoney(unitShipping)} each</p>
+                    {unitDiscount > 0 ? <p className="text-xs text-emerald-700">Discount: {formatMoney(unitDiscount * Number(item.quantity || 0))}</p> : null}
                   </div>
-                  <p className="text-sm font-semibold text-ink">Rs. {item.subtotal.toFixed(2)}</p>
+                  <p className="text-sm font-semibold text-ink">{formatMoney(Number(item.lineTotal || item.subtotal || 0))}</p>
                 </article>
               );
             })}
           </div>
 
           <div className="mt-4 space-y-2 border-t border-slate-200 pt-4 text-sm">
-            <div className="flex justify-between"><span className="text-muted">Subtotal</span><span>Rs. {cartSubtotal.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span className="text-muted">Shipping</span><span>{shippingCost === 0 ? "Free" : `Rs. ${shippingCost.toFixed(2)}`}</span></div>
-            <div className="flex justify-between text-base font-semibold"><span>Total</span><span className="text-brand-dark">Rs. {total.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-muted">Subtotal</span><span>{formatMoney(cartSubtotal)}</span></div>
+            <div className="flex justify-between"><span className="text-muted">Shipping</span><span>{formatMoney(Number(cartShippingTotal || 0))}</span></div>
+            <div className="flex justify-between"><span className="text-muted">Discount</span><span>- {formatMoney(Number(cartDiscountTotal || 0))}</span></div>
+            <div className="flex justify-between text-base font-semibold"><span>Total</span><span className="text-brand-dark">{formatMoney(total)}</span></div>
           </div>
 
           <button

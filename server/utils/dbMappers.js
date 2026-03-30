@@ -33,6 +33,8 @@ export const mapProduct = (row) => {
     description: row.description,
     price: Number(row.price || 0),
     discountPrice: row.discount_price == null ? null : Number(row.discount_price),
+    productCost: Number(row.product_cost || 0),
+    shippingPrice: Number(row.shipping_price || 0),
     category: row.category,
     sku: row.sku || "",
     brand: row.brand || "",
@@ -60,7 +62,26 @@ export const mapOrder = (row, options = {}) => {
     name: item.name,
     image: item.image,
     price: Number(item.price || 0),
+    listPrice: Number(item.list_price ?? item.price ?? 0),
+    discountAmount: Number(item.discount_amount || 0),
+    productCost: Number(item.product_cost || 0),
+    shippingPrice: Number(item.shipping_price || 0),
     quantity: item.quantity,
+    lineSubtotal: Number(item.line_subtotal || Number(item.price || 0) * Number(item.quantity || 0)),
+    lineShippingTotal: Number(item.line_shipping_total || Number(item.shipping_price || 0) * Number(item.quantity || 0)),
+    lineDiscountTotal: Number(item.line_discount_total || Number(item.discount_amount || 0) * Number(item.quantity || 0)),
+    lineProductCostTotal: Number(item.line_product_cost_total || Number(item.product_cost || 0) * Number(item.quantity || 0)),
+    lineTotal:
+      Number(item.line_total) ||
+      Number((Number(item.line_subtotal || Number(item.price || 0) * Number(item.quantity || 0)) + Number(item.line_shipping_total || Number(item.shipping_price || 0) * Number(item.quantity || 0))).toFixed(2)),
+    lineProfitTotal:
+      Number(item.line_profit_total) ||
+      Number((
+        Number(item.line_subtotal || Number(item.price || 0) * Number(item.quantity || 0)) -
+        (Number(item.line_product_cost_total || Number(item.product_cost || 0) * Number(item.quantity || 0)) +
+          Number(item.line_shipping_total || Number(item.shipping_price || 0) * Number(item.quantity || 0)) +
+          Number(item.line_discount_total || Number(item.discount_amount || 0) * Number(item.quantity || 0)))
+      ).toFixed(2)),
   }));
 
   const mapped = {
@@ -69,6 +90,11 @@ export const mapOrder = (row, options = {}) => {
     userId: row.user_id,
     items: mappedItems,
     totalAmount: Number(row.total_amount || 0),
+    subtotalAmount: Number(row.subtotal_amount || 0),
+    shippingTotal: Number(row.shipping_total || 0),
+    discountTotal: Number(row.discount_total || 0),
+    productCostTotal: Number(row.product_cost_total || 0),
+    profitTotal: Number(row.profit_total || 0),
     paymentStatus: row.payment_status,
     orderStatus: row.order_status,
     paymentMethod: row.payment_method || "cod",

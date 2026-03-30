@@ -7,7 +7,7 @@ import { mapOrder } from "../utils/dbMappers.js";
 const stripe = env.stripeSecretKey ? new Stripe(env.stripeSecretKey) : null;
 
 const orderSelect =
-  "id, user_id, total_amount, payment_status, order_status, payment_method, payment_intent_id, created_at, updated_at, users:user_id(id, name, email), order_items(product_id, name, image, price, quantity), order_shipping_addresses(full_name, line1, line2, city, state, postal_code, country, phone)";
+  "id, user_id, subtotal_amount, shipping_total, discount_total, product_cost_total, profit_total, total_amount, payment_status, order_status, payment_method, payment_intent_id, created_at, updated_at, users:user_id(id, name, email), order_items(product_id, name, image, price, list_price, discount_amount, product_cost, shipping_price, quantity, line_subtotal, line_shipping_total, line_discount_total, line_product_cost_total, line_total, line_profit_total), order_shipping_addresses(full_name, line1, line2, city, state, postal_code, country, phone)";
 
 const mapAddressRow = (row) => ({
   id: row.id,
@@ -68,10 +68,29 @@ const loadCartWithProducts = async (userId) => {
     return { cart: null, items: [] };
   }
 
-  const { data: items, error: itemsError } = await supabase
+  let { data: items, error: itemsError } = await supabase
     .from("cart_items")
-    .select("product_id, quantity, products(id, name, stock, price, discount_price, product_images(image_url, sort_order))")
+    .select("product_id, quantity, products(id, name, stock, price, discount_price, product_cost, shipping_price, product_images(image_url, sort_order))")
     .eq("cart_id", cart.id);
+
+  if (
+    itemsError &&
+    (isMissingColumnError(itemsError, "product_cost") ||
+      isMissingColumnError(itemsError, "shipping_price"))
+  ) {
+    const fallback = await supabase
+      .from("cart_items")
+      .select("product_id, quantity, products(id, name, stock, price, discount_price, product_images(image_url, sort_order))")
+      .eq("cart_id", cart.id);
+
+    items = (fallback.data || []).map((entry) => ({
+      ...entry,
+      products: entry.products
+        ? { ...entry.products, product_cost: 0, shipping_price: 0 }
+        : entry.products,
+    }));
+    itemsError = fallback.error;
+  }
 
   if (itemsError) {
     throw new Error(itemsError.message);
@@ -123,13 +142,20 @@ export const createOrder = asyncHandler(async (req, res) => {
     }
   }
 
-  const totalAmount = items.reduce((sum, item) => {
-    const unitPrice = Number(item.products.discount_price ?? item.products.price ?? 0);
-    return sum + item.quantity * unitPrice;
-  }, 0);
-
   const orderItems = items.map((item) => {
-    const unitPrice = Number(item.products.discount_price ?? item.products.price ?? 0);
+    const listPrice = Number(item.products.price ?? 0);
+    const unitSellingPrice = Number(item.products.discount_price ?? item.products.price ?? 0);
+    const unitDiscountAmount = Math.max(0, listPrice - unitSellingPrice);
+    const unitProductCost = Number(item.products.product_cost ?? 0);
+    const unitShippingPrice = Number(item.products.shipping_price ?? 0);
+    const quantity = Number(item.quantity || 0);
+    const lineSubtotal = unitSellingPrice * quantity;
+    const lineShippingTotal = unitShippingPrice * quantity;
+    const lineDiscountTotal = unitDiscountAmount * quantity;
+    const lineProductCostTotal = unitProductCost * quantity;
+    const lineTotal = lineSubtotal + lineShippingTotal;
+    const lineProfitTotal = lineSubtotal - (lineProductCostTotal + lineShippingTotal + lineDiscountTotal);
+
     return {
       product_id: item.products.id,
       name: item.products.name,
@@ -137,15 +163,37 @@ export const createOrder = asyncHandler(async (req, res) => {
         item.products.product_images
           ?.slice()
           .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))[0]?.image_url || "",
-      price: unitPrice,
-      quantity: item.quantity,
+      price: unitSellingPrice,
+      list_price: listPrice,
+      discount_amount: unitDiscountAmount,
+      product_cost: unitProductCost,
+      shipping_price: unitShippingPrice,
+      quantity,
+      line_subtotal: lineSubtotal,
+      line_shipping_total: lineShippingTotal,
+      line_discount_total: lineDiscountTotal,
+      line_product_cost_total: lineProductCostTotal,
+      line_total: lineTotal,
+      line_profit_total: lineProfitTotal,
     };
   });
+
+  const subtotalAmount = orderItems.reduce((sum, item) => sum + Number(item.line_subtotal || 0), 0);
+  const shippingTotal = orderItems.reduce((sum, item) => sum + Number(item.line_shipping_total || 0), 0);
+  const discountTotal = orderItems.reduce((sum, item) => sum + Number(item.line_discount_total || 0), 0);
+  const productCostTotal = orderItems.reduce((sum, item) => sum + Number(item.line_product_cost_total || 0), 0);
+  const totalAmount = subtotalAmount + shippingTotal;
+  const profitTotal = subtotalAmount - (productCostTotal + shippingTotal + discountTotal);
 
   const { data: createdOrder, error: createOrderError } = await supabase
     .from("orders")
     .insert({
       user_id: req.user._id,
+      subtotal_amount: subtotalAmount,
+      shipping_total: shippingTotal,
+      discount_total: discountTotal,
+      product_cost_total: productCostTotal,
+      profit_total: profitTotal,
       total_amount: totalAmount,
       payment_status: paymentStatus,
       order_status: "created",

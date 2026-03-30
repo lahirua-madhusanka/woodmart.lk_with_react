@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
+import { useStorefrontSettings } from "../context/StorefrontSettingsContext";
 import { getApiErrorMessage } from "../services/apiClient";
 import { getUserOrdersApi } from "../services/orderService";
 
 function OrdersPage() {
+  const { formatMoney } = useStorefrontSettings();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +50,7 @@ function OrdersPage() {
                 </div>
               </div>
               <div className="mt-3 grid gap-2 text-sm text-muted sm:grid-cols-3">
-                <p>Total: Rs. {order.totalAmount.toFixed(2)}</p>
+                <p>Total: {formatMoney(order.totalAmount)}</p>
                 <p>Payment: {order.paymentStatus}</p>
                 <p>Items: {order.items.length}</p>
               </div>

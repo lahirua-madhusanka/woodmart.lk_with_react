@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { toast } from "react-toastify";
 import Loader from "../components/Loader";
 import { getSettings, saveSettings } from "../services/settingsService";
+import { getApiErrorMessage } from "../../services/apiClient";
 
 function SettingsPage() {
   const [settings, setSettings] = useState(null);
@@ -8,8 +10,12 @@ function SettingsPage() {
 
   useEffect(() => {
     const load = async () => {
-      const data = await getSettings();
-      setSettings(data);
+      try {
+        const data = await getSettings();
+        setSettings(data);
+      } catch (error) {
+        toast.error(getApiErrorMessage(error));
+      }
     };
 
     load();
@@ -22,10 +28,16 @@ function SettingsPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setSaving(true);
-    const updated = await saveSettings(settings);
-    setSettings(updated);
-    setSaving(false);
+    try {
+      setSaving(true);
+      const updated = await saveSettings(settings);
+      setSettings(updated);
+      toast.success("Settings saved successfully");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!settings) {
@@ -43,10 +55,10 @@ function SettingsPage() {
         />
       </label>
       <label className="text-sm text-muted">
-        Admin Email
+        Support Email
         <input
-          value={settings.adminEmail || ""}
-          onChange={setField("adminEmail")}
+          value={settings.supportEmail || ""}
+          onChange={setField("supportEmail")}
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
       </label>
@@ -67,11 +79,10 @@ function SettingsPage() {
         />
       </label>
       <label className="text-sm text-muted">
-        Delivery Fee
+        Store Address
         <input
-          type="number"
-          value={settings.deliveryFee || 0}
-          onChange={setField("deliveryFee")}
+          value={settings.storeAddress || ""}
+          onChange={setField("storeAddress")}
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
       </label>
@@ -81,15 +92,6 @@ function SettingsPage() {
           type="number"
           value={settings.freeShippingThreshold || 0}
           onChange={setField("freeShippingThreshold")}
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="text-sm text-muted">
-        Tax Rate (%)
-        <input
-          type="number"
-          value={settings.taxRate || 0}
-          onChange={setField("taxRate")}
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
       </label>

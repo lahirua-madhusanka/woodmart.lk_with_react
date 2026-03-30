@@ -52,6 +52,14 @@ router.post(
       .optional({ nullable: true })
       .isFloat({ min: 0 })
       .withMessage("Discount price must be positive"),
+    body("productCost")
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage("Product cost must be a non-negative value"),
+    body("shippingPrice")
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage("Shipping price must be a non-negative value"),
     body("sku").optional({ nullable: true }).isString(),
     body("brand").optional().isString(),
     body("featured").optional().isBoolean(),

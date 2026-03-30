@@ -1,10 +1,33 @@
-import { mockSettings } from "../data/mockAdminData";
+import { get, put, safeRequest } from "./adminApi";
 
-let settings = { ...mockSettings };
+const defaultSettings = {
+  storeName: "Woodmart.lk",
+  supportEmail: "",
+  contactNumber: "",
+  storeAddress: "",
+  currency: "Rs.",
+  freeShippingThreshold: 199,
+  themeAccent: "#0959a4",
+};
 
-export const getSettings = async () => ({ ...settings });
+const normalizeSettings = (data = {}) => ({
+  ...defaultSettings,
+  ...data,
+  freeShippingThreshold: Number(
+    data.freeShippingThreshold ?? defaultSettings.freeShippingThreshold
+  ),
+});
+
+export const getSettings = async () => {
+  const data = await safeRequest(() => get("/admin/settings"), defaultSettings);
+  return normalizeSettings(data);
+};
 
 export const saveSettings = async (payload) => {
-  settings = { ...settings, ...payload };
-  return { ...settings };
+  const response = await put("/admin/settings", payload);
+  const next = normalizeSettings(response?.data ?? response);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("storefront-settings-updated", { detail: next }));
+  }
+  return next;
 };

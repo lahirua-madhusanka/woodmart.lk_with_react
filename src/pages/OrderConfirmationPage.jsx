@@ -2,11 +2,13 @@ import { CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
+import { useStorefrontSettings } from "../context/StorefrontSettingsContext";
 import { getApiErrorMessage } from "../services/apiClient";
 import { getOrderByIdApi } from "../services/orderService";
 
 function OrderConfirmationPage() {
   const { id } = useParams();
+  const { formatMoney } = useStorefrontSettings();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -68,15 +70,22 @@ function OrderConfirmationPage() {
             <h2 className="font-semibold">Order Summary</h2>
             <p className="mt-2 text-sm text-muted">Payment: {order.paymentStatus}</p>
             <p className="mt-1 text-sm text-muted">Status: {order.orderStatus}</p>
-            <p className="mt-1 text-sm font-semibold text-brand-dark">Total: Rs. {order.totalAmount.toFixed(2)}</p>
+            <p className="mt-1 text-sm text-muted">Subtotal: {formatMoney(Number(order.subtotalAmount || 0))}</p>
+            <p className="mt-1 text-sm text-muted">Shipping: {formatMoney(Number(order.shippingTotal || 0))}</p>
+            <p className="mt-1 text-sm text-muted">Discount: {formatMoney(Number(order.discountTotal || 0))}</p>
+            <p className="mt-1 text-sm font-semibold text-brand-dark">Total: {formatMoney(Number(order.totalAmount || 0))}</p>
           </div>
         </div>
 
         <div className="mt-6 space-y-2 rounded-xl border border-slate-200 p-4">
           {order.items.map((item) => (
             <div key={item.productId} className="flex justify-between text-sm">
-              <span>{item.name} x {item.quantity}</span>
-              <span>Rs. {(item.quantity * item.price).toFixed(2)}</span>
+              <span>
+                {item.name} x {item.quantity}
+                <br />
+                <span className="text-xs text-muted">Item: {formatMoney(Number(item.price || 0))} | Shipping: {formatMoney(Number(item.shippingPrice || 0))} | Discount: {formatMoney(Number(item.discountAmount || 0))}</span>
+              </span>
+              <span>{formatMoney(Number(item.lineTotal || (item.quantity * item.price)))}</span>
             </div>
           ))}
         </div>

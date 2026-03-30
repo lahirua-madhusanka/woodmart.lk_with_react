@@ -5,12 +5,15 @@ import {
   PlusSquare,
   Tags,
   ShoppingBag,
+  LineChart,
+  MessageSquare,
   Users,
   Star,
   Image,
   TicketPercent,
   Settings,
 } from "lucide-react";
+import { useChatRealtime } from "../../context/ChatRealtimeContext";
 
 const links = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -18,6 +21,8 @@ const links = [
   { to: "/admin/products/add", label: "Add Product", icon: PlusSquare },
   { to: "/admin/categories", label: "Categories", icon: Tags },
   { to: "/admin/orders", label: "Orders", icon: ShoppingBag },
+  { to: "/admin/profit", label: "Profit Report", icon: LineChart },
+  { to: "/admin/messages", label: "Messages", icon: MessageSquare },
   { to: "/admin/customers", label: "Customers", icon: Users },
   { to: "/admin/reviews", label: "Reviews", icon: Star },
   { to: "/admin/banners", label: "Banners", icon: Image },
@@ -26,6 +31,8 @@ const links = [
 ];
 
 function Sidebar() {
+  const { adminUnreadCount } = useChatRealtime();
+
   return (
     <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white p-4 lg:block">
       <div className="rounded-lg bg-brand px-3 py-2 text-sm font-bold text-white">Admin Panel</div>
@@ -44,7 +51,12 @@ function Sidebar() {
               }
             >
               <Icon size={16} />
-              <span>{link.label}</span>
+              <span className="flex-1">{link.label}</span>
+              {link.to === "/admin/messages" && adminUnreadCount > 0 ? (
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-bold text-white">
+                  {adminUnreadCount}
+                </span>
+              ) : null}
             </NavLink>
           );
         })}

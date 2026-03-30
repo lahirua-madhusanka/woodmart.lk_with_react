@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import ProductGrid from "../components/products/ProductGrid";
 import { useStore } from "../context/StoreContext";
 import { useAuth } from "../context/AuthContext";
+import { useStorefrontSettings } from "../context/StorefrontSettingsContext";
 import { getApiErrorMessage } from "../services/apiClient";
 import { addProductReviewApi, getProductByIdApi } from "../services/productService";
 
@@ -14,6 +15,7 @@ function ProductDetailsPage() {
   const location = useLocation();
   const { addToCart, getProductId, loadingProducts, products, toggleWishlist, wishlist } = useStore();
   const { isAuthenticated, user } = useAuth();
+  const { settings, formatMoney } = useStorefrontSettings();
   const [remoteProduct, setRemoteProduct] = useState(null);
   const [loadingRemoteProduct, setLoadingRemoteProduct] = useState(false);
   const productFromStore = products.find((item) => getProductId(item) === String(id));
@@ -64,7 +66,7 @@ function ProductDetailsPage() {
   const hasStockLimit = Number.isFinite(stockValue) && stockValue >= 0;
   const inStock = !hasStockLimit || stockValue > 0;
   const maxQuantity = hasStockLimit && stockValue > 0 ? stockValue : 99;
-  const brand = product?.brand || "Woodmart.lk";
+  const brand = product?.brand || settings.storeName;
   const sku = product?.sku || "Not specified";
 
   useEffect(() => {
@@ -265,12 +267,12 @@ function ProductDetailsPage() {
           </div>
 
           <div className="mt-4 flex items-center gap-3">
-            <span className="text-3xl font-bold text-brand-dark">Rs. {unitPrice.toLocaleString()}</span>
+            <span className="text-3xl font-bold text-brand-dark">{formatMoney(unitPrice)}</span>
             {hasDiscount && (
-              <span className="text-lg text-muted line-through">Rs. {regularPrice.toLocaleString()}</span>
+              <span className="text-lg text-muted line-through">{formatMoney(regularPrice)}</span>
             )}
             {!hasDiscount && product.oldPrice && (
-              <span className="text-lg text-muted line-through">Rs. {Number(product.oldPrice).toLocaleString()}</span>
+              <span className="text-lg text-muted line-through">{formatMoney(Number(product.oldPrice))}</span>
             )}
           </div>
 

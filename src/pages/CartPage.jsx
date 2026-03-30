@@ -1,16 +1,21 @@
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useStorefrontSettings } from "../context/StorefrontSettingsContext";
 import { useStore } from "../context/StoreContext";
 
 function CartPage() {
   const {
     cartDetailedItems,
     cartSubtotal,
+    cartShippingTotal,
     updateCartItem,
     removeFromCart,
   } = useStore();
+  const { settings, formatMoney } = useStorefrontSettings();
 
-  const shipping = cartSubtotal > 199 || cartSubtotal === 0 ? 0 : 18;
+  const freeShippingThreshold = Number(settings.freeShippingThreshold || 0);
+  const baseShipping = Number(cartShippingTotal || 0);
+  const shipping = cartSubtotal > freeShippingThreshold || cartSubtotal === 0 ? 0 : baseShipping;
   const total = cartSubtotal + shipping;
 
   return (
@@ -35,7 +40,7 @@ function CartPage() {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-brand">{item.category}</p>
                   <h2 className="font-semibold">{item.name}</h2>
-                  <p className="mt-1 text-sm text-muted">Rs. {Number(item.discountPrice || item.price)} each</p>
+                  <p className="mt-1 text-sm text-muted">{formatMoney(Number(item.discountPrice || item.price))} each</p>
                   <div className="mt-3 inline-flex items-center rounded-lg border border-slate-300">
                     <button
                       onClick={() => updateCartItem(item.productId, item.quantity - 1)}
@@ -61,7 +66,7 @@ function CartPage() {
                   >
                     <Trash2 size={16} />
                   </button>
-                  <p className="text-lg font-bold text-brand-dark">Rs. {item.subtotal.toFixed(2)}</p>
+                  <p className="text-lg font-bold text-brand-dark">{formatMoney(item.subtotal)}</p>
                 </div>
               </article>
             ))}
@@ -72,19 +77,23 @@ function CartPage() {
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted">Subtotal</span>
-                <span className="font-semibold">Rs. {cartSubtotal.toFixed(2)}</span>
+                <span className="font-semibold">{formatMoney(cartSubtotal)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">Shipping</span>
                 <span className="font-semibold">
-                  {shipping === 0 ? "Free" : `Rs. ${shipping.toFixed(2)}`}
+                  {shipping === 0 ? "Free" : formatMoney(shipping)}
                 </span>
               </div>
               <div className="flex justify-between border-t border-slate-200 pt-2 text-base">
                 <span className="font-semibold">Total</span>
-                <span className="font-bold text-brand-dark">Rs. {total.toFixed(2)}</span>
+                <span className="font-bold text-brand-dark">{formatMoney(total)}</span>
               </div>
             </div>
+
+            <p className="mt-3 text-xs text-muted">
+              Free shipping above {formatMoney(freeShippingThreshold)}
+            </p>
 
             <div className="mt-5">
               <label className="mb-2 block text-sm font-semibold">Coupon Code</label>

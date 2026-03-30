@@ -70,6 +70,8 @@ function ProductFormPage() {
         category: payload.category,
         price: payload.price,
         discountPrice: payload.discountPrice,
+        productCost: payload.productCost,
+        shippingPrice: payload.shippingPrice,
         stock: payload.stock,
         sku: payload.sku,
         brand: payload.brand,

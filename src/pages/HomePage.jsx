@@ -1,11 +1,10 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { ArrowRight } from "lucide-react";
 import HeroSection from "../components/home/HeroSection";
 import LazySection from "../components/common/LazySection";
 import RoutePrefetchLink from "../components/common/RoutePrefetchLink";
 import SectionSkeleton from "../components/common/SectionSkeleton";
 import { useStore } from "../context/StoreContext";
-import { categories } from "../data/products";
 import { warmLikelyStorefrontRoutes } from "../utils/performance/prefetchRoutes";
 
 // Keep only above-the-fold content eager and defer all heavy secondary sections.
@@ -20,6 +19,31 @@ const NewsletterSection = lazy(() => import("../components/home/NewsletterSectio
 function HomePage() {
   const { loadingProducts, products } = useStore();
 
+  const featuredCategories = useMemo(() => {
+    const categoryMap = new Map();
+
+    for (const item of products || []) {
+      const categoryName = String(item?.category || "Other").trim() || "Other";
+      const existing = categoryMap.get(categoryName);
+
+      if (existing) {
+        existing.count += 1;
+        continue;
+      }
+
+      categoryMap.set(categoryName, {
+        id: categoryName.toLowerCase().replace(/\s+/g, "-"),
+        name: categoryName,
+        image: item?.images?.[0] || item?.image || "",
+        count: 1,
+      });
+    }
+
+    return [...categoryMap.values()]
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      .slice(0, 4);
+  }, [products]);
+
   useEffect(() => {
     // Prefetch likely next route during idle time to improve first interaction latency.
     warmLikelyStorefrontRoutes();
@@ -32,6 +56,36 @@ function HomePage() {
 
   const bestSelling = sortedByRating.slice(0, 6);
   const newArrivals = sortedByNew.slice(0, 6);
+  const customerTestimonials = useMemo(() => {
+    const reviews = [];
+
+    for (const product of products || []) {
+      const productName = product?.name || "Product";
+      const entries = Array.isArray(product?.reviews) ? product.reviews : [];
+
+      for (const review of entries) {
+        const comment = String(review?.comment || "").trim();
+        if (!comment) continue;
+
+        reviews.push({
+          id: review?._id || `${productName}-${review?.createdAt || reviews.length}`,
+          name: String(review?.name || "Verified customer").trim() || "Verified customer",
+          quote: comment,
+          rating: Number(review?.rating || 0),
+          productName,
+          createdAt: review?.createdAt || null,
+        });
+      }
+    }
+
+    return reviews
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime() ||
+          b.rating - a.rating
+      )
+      .slice(0, 2);
+  }, [products]);
 
   return (
     <>
@@ -43,7 +97,7 @@ function HomePage() {
         fallback={<SectionSkeleton minHeight={420} title="Preparing categories..." />}
       >
         <Suspense fallback={<SectionSkeleton minHeight={420} title="Preparing categories..." />}>
-          <CategorySection categories={categories} />
+          <CategorySection categories={featuredCategories} />
         </Suspense>
       </LazySection>
 
@@ -130,7 +184,7 @@ function HomePage() {
         fallback={<SectionSkeleton minHeight={260} title="Loading testimonials..." />}
       >
         <Suspense fallback={<SectionSkeleton minHeight={260} title="Loading testimonials..." />}>
-          <TestimonialsSection />
+          <TestimonialsSection testimonials={customerTestimonials} />
         </Suspense>
       </LazySection>
 

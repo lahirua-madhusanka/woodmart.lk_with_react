@@ -11,6 +11,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import RoutePrefetchLink from "../common/RoutePrefetchLink";
 import { usePrefetchOnHover, usePrefetchTrigger } from "../../hooks/usePrefetchOnHover";
 import { useAuth } from "../../context/AuthContext";
+import { useStorefrontSettings } from "../../context/StorefrontSettingsContext";
 import { useStore } from "../../context/StoreContext";
 
 const menuLinks = [
@@ -26,6 +27,7 @@ function Navbar() {
   const [searchText, setSearchText] = useState("");
   const navigate = useNavigate();
   const { isAuthenticated, logout, user } = useAuth();
+  const { settings } = useStorefrontSettings();
   const { cartCount, wishlist } = useStore();
   const cartPrefetch = usePrefetchOnHover("cart");
   const wishlistPrefetch = usePrefetchOnHover("wishlist");
@@ -59,7 +61,7 @@ function Navbar() {
           </button>
 
           <NavLink to="/" className="shrink-0 font-display text-2xl font-bold text-brand">
-            Woodmart.lk
+            {settings.storeName}
           </NavLink>
 
           <nav className="hidden items-center gap-6 xl:gap-7 lg:flex">
