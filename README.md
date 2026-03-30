@@ -118,6 +118,87 @@ npm run build
 npm run preview
 ```
 
+## Deploy To GitHub (Frontend + Backend)
+
+GitHub Pages can host the frontend only (static files). Your backend API must be hosted on a server platform such as Render, Railway, or Fly.io.
+
+### 1. Push repository to GitHub
+- Create a GitHub repository and push this project.
+- Make sure your default branch is `main`.
+
+### 2. Host backend API
+- Deploy the `server` folder to Render/Railway/Fly.
+- Set backend environment variables from `server/.env.example`.
+- Set `CLIENT_URL` to your GitHub Pages URL after step 4.
+
+### 3. Add GitHub repository secrets
+Go to GitHub repository settings:
+`Settings -> Secrets and variables -> Actions -> New repository secret`
+
+Create these secrets:
+- `VITE_API_URL` : backend API base URL, for example `https://your-backend-domain.com/api`
+- `VITE_SOCKET_URL` : backend socket origin, for example `https://your-backend-domain.com`
+- `VITE_STRIPE_PUBLISHABLE_KEY` : your Stripe publishable key
+
+### 4. Enable GitHub Pages
+- Go to repository `Settings -> Pages`.
+- Under `Build and deployment`, choose `GitHub Actions`.
+
+The workflow file `.github/workflows/deploy-frontend-pages.yml` will auto-deploy on every push to `main`.
+
+### 5. Verify deployment
+- Open `Actions` tab and confirm the workflow succeeds.
+- Open the Pages URL shown in `Settings -> Pages`.
+- Verify storefront and admin routes load correctly.
+
+## Backend Hosting (Render)
+
+Use Render to host the Node/Express API from the `server` directory.
+
+### 1. Connect repository
+- Go to Render dashboard and choose `New +` -> `Blueprint`.
+- Select this GitHub repository.
+- Render will detect [render.yaml](render.yaml) and create the API service.
+
+### 2. Set backend environment variables
+In Render service settings, fill all `sync: false` variables from [server/.env.example](server/.env.example):
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_ANON_KEY`
+- `JWT_SECRET`
+- `CLIENT_URL` : your GitHub Pages frontend URL
+- `STRIPE_SECRET_KEY`
+- `ADMIN_REGISTER_SECRET`
+- `SMTP_HOST`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+
+Optional but recommended:
+- `JWT_EXPIRES_IN` (default `7d`)
+- `PRODUCT_IMAGES_BUCKET` (default `product-images`)
+
+### 3. Deploy and verify
+- Deploy service.
+- Confirm health endpoint works: `https://<render-service>.onrender.com/api/health`
+
+### 4. Connect frontend to backend
+After backend is live, set/update GitHub Actions secrets in your repository:
+
+- `VITE_API_URL` = `https://<render-service>.onrender.com/api`
+- `VITE_SOCKET_URL` = `https://<render-service>.onrender.com`
+
+Push to `main` to redeploy frontend with the new API URL.
+
+### 5. CORS check
+If frontend cannot call backend, confirm `CLIENT_URL` exactly matches your GitHub Pages URL (no trailing slash mismatch).
+
+### Notes
+- Routing is already configured for GitHub Pages subpaths.
+- If your repository is named `<user>.github.io`, the app deploys at root `/`.
+- Otherwise, it deploys at `/<repo-name>/` automatically.
+
 ## API Endpoints
 
 ### Auth

@@ -13,7 +13,7 @@ import { StoreProvider } from "./context/StoreContext";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <StorefrontSettingsProvider>
         <UserAuthProvider>
           <AdminAuthProvider>
