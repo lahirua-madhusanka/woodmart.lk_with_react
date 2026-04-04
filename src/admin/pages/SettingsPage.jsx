@@ -105,6 +105,31 @@ function SettingsPage() {
         />
       </label>
       <label className="text-sm text-muted">
+        Business Hours
+        <input
+          value={settings.businessHours || ""}
+          onChange={setField("businessHours")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="text-sm text-muted md:col-span-2">
+        Support Note
+        <textarea
+          rows={2}
+          value={settings.supportNote || ""}
+          onChange={setField("supportNote")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="text-sm text-muted md:col-span-2">
+        Contact Section Image URL
+        <input
+          value={settings.contactImageUrl || ""}
+          onChange={setField("contactImageUrl")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="text-sm text-muted">
         Free Shipping Threshold
         <input
           type="number"

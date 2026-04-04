@@ -5,6 +5,10 @@ const defaultSettings = {
   supportEmail: "",
   contactNumber: "",
   storeAddress: "",
+  businessHours: "Mon - Sat, 9:00 AM - 7:00 PM",
+  supportNote: "Visit our showroom or contact our team for personalized recommendations.",
+  contactImageUrl:
+    "https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1000&q=80",
   currency: "Rs.",
   freeShippingThreshold: 199,
   themeAccent: "#0959a4",

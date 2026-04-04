@@ -8,9 +8,11 @@ import { mapProduct, mapUser } from "../utils/dbMappers.js";
 import { sendVerificationEmail } from "../utils/email.js";
 
 const signToken = (id) => jwt.sign({ id }, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
-const EMAIL_VERIFICATION_TTL_HOURS = 24;
+const EMAIL_VERIFICATION_TTL_HOURS = 1;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 const resendGuard = new Map();
+const recentVerifiedTokens = new Map();
+const RECENT_VERIFIED_TOKEN_TTL_MS = 10 * 60 * 1000;
 
 const getDefaultNameFromEmail = (email) => {
   const [namePart] = String(email || "").split("@");
@@ -32,16 +34,16 @@ const createVerificationToken = () => {
 };
 
 const buildVerificationUrl = (token) =>
-  `${env.clientUrl}/auth/verify-email?token=${encodeURIComponent(token)}`;
+  `${env.clientUrl}/verify-email?token=${encodeURIComponent(token)}`;
 
 const persistVerificationToken = async ({ userId, tokenHash, expiresAt }) => {
-  const { error } = await supabase
-    .from("users")
-    .update({
-      email_verification_token_hash: tokenHash,
-      email_verification_expires_at: expiresAt,
-    })
-    .eq("id", userId);
+  await supabase.from("verification_tokens").delete().eq("user_id", userId);
+
+  const { error } = await supabase.from("verification_tokens").insert({
+    user_id: userId,
+    token: tokenHash,
+    expires_at: expiresAt,
+  });
 
   if (error) {
     throw new Error(error.message || "Failed to persist verification token");
@@ -399,10 +401,26 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   }
 
   const tokenHash = hashVerificationToken(token);
-  const { data: user, error } = await supabase
-    .from("users")
-    .select("id, email_verified, email_verification_expires_at")
-    .eq("email_verification_token_hash", tokenHash)
+
+  // Clean stale entries from in-memory recently-verified cache.
+  for (const [cachedTokenHash, verifiedAt] of recentVerifiedTokens.entries()) {
+    if (Date.now() - verifiedAt > RECENT_VERIFIED_TOKEN_TTL_MS) {
+      recentVerifiedTokens.delete(cachedTokenHash);
+    }
+  }
+
+  if (recentVerifiedTokens.has(tokenHash)) {
+    return res.json({
+      success: true,
+      status: "already_verified",
+      message: "Email already verified. Please log in.",
+    });
+  }
+
+  const { data: tokenRow, error } = await supabase
+    .from("verification_tokens")
+    .select("id, user_id, expires_at")
+    .eq("token", tokenHash)
     .maybeSingle();
 
   if (error) {
@@ -410,27 +428,52 @@ export const verifyEmail = asyncHandler(async (req, res) => {
     throw new Error(error.message);
   }
 
-  if (!user) {
+  if (!tokenRow) {
     res.status(400);
-    throw new Error("Verification link is invalid or expired");
+    throw new Error("Invalid verification link");
   }
 
-  const expiresAt = user.email_verification_expires_at ? new Date(user.email_verification_expires_at) : null;
+  const expiresAt = tokenRow.expires_at ? new Date(tokenRow.expires_at) : null;
   if (!expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
+    await supabase.from("verification_tokens").delete().eq("id", tokenRow.id);
     res.status(400);
-    throw new Error("Verification link is invalid or expired");
+    throw new Error("Verification link has expired. Please request a new one.");
+  }
+
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("id, email_verified")
+    .eq("id", tokenRow.user_id)
+    .maybeSingle();
+
+  if (userError) {
+    res.status(500);
+    throw new Error(userError.message);
+  }
+
+  if (!user) {
+    await supabase.from("verification_tokens").delete().eq("id", tokenRow.id);
+    res.status(400);
+    throw new Error("Invalid verification link");
+  }
+
+  if (user.email_verified) {
+    await supabase.from("verification_tokens").delete().eq("id", tokenRow.id);
+    recentVerifiedTokens.set(tokenHash, Date.now());
+    return res.json({
+      success: true,
+      status: "already_verified",
+      message: "Email already verified. Please log in.",
+    });
   }
 
   if (!user.email_verified) {
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({
-        email_verified: true,
-        email_verified_at: new Date().toISOString(),
-        email_verification_token_hash: null,
-        email_verification_expires_at: null,
-      })
-      .eq("id", user.id);
+    const { error: updateError } = await supabase.from("users").update({
+      email_verified: true,
+      email_verified_at: new Date().toISOString(),
+      email_verification_token_hash: null,
+      email_verification_expires_at: null,
+    }).eq("id", user.id);
 
     if (updateError) {
       res.status(500);
@@ -438,7 +481,14 @@ export const verifyEmail = asyncHandler(async (req, res) => {
     }
   }
 
-  res.json({ message: "Email verified successfully" });
+  await supabase.from("verification_tokens").delete().eq("id", tokenRow.id);
+  recentVerifiedTokens.set(tokenHash, Date.now());
+
+  return res.json({
+    success: true,
+    status: "verified",
+    message: "Email verified successfully",
+  });
 });
 
 export const resendVerificationEmail = asyncHandler(async (req, res) => {
@@ -474,11 +524,23 @@ export const resendVerificationEmail = asyncHandler(async (req, res) => {
     return res.json({ message: "Email is already verified" });
   }
 
-  await sendVerificationToUser({
-    userId: user.id,
-    email: user.email,
-    name: user.name,
-  });
+  try {
+    await sendVerificationToUser({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+    });
+  } catch (error) {
+    if (error?.statusCode === 429) {
+      res.setHeader("Retry-After", String(error.retryAfter || 60));
+      res.status(429);
+      throw new Error(error.message || "Email provider is busy. Please try again shortly.");
+    }
+
+    res.status(500);
+    throw new Error(error?.message || "Unable to send verification email right now.");
+  }
+
   resendGuard.set(normalizedEmail, Date.now());
 
   res.json({ message: "Verification email sent. Please check your inbox." });

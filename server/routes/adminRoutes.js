@@ -31,6 +31,10 @@ import {
   getAdminCoupons,
   updateAdminCoupon,
 } from "../controllers/couponController.js";
+import {
+  getAdminContactMessages,
+  updateAdminContactMessageStatus,
+} from "../controllers/contactController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 import { validateRequest } from "../middleware/validateMiddleware.js";
 
@@ -73,6 +77,15 @@ router.put(
     body("storeAddress")
       .custom((value) => !value || String(value).length <= 255)
       .withMessage("Store address must be at most 255 characters"),
+    body("businessHours")
+      .custom((value) => !value || String(value).length <= 120)
+      .withMessage("Business hours must be at most 120 characters"),
+    body("supportNote")
+      .custom((value) => !value || String(value).length <= 300)
+      .withMessage("Support note must be at most 300 characters"),
+    body("contactImageUrl")
+      .custom((value) => !value || /^https?:\/\/.+/i.test(String(value)))
+      .withMessage("Contact image URL must be a valid URL"),
     body("currency")
       .trim()
       .notEmpty()
@@ -291,5 +304,13 @@ router.put(
   updateAdminCoupon
 );
 router.delete("/coupons/:id", deleteAdminCoupon);
+
+router.get("/contact-messages", getAdminContactMessages);
+router.patch(
+  "/contact-messages/:id/status",
+  [body("status").trim().isIn(["new", "read", "replied"]).withMessage("Invalid contact message status")],
+  validateRequest,
+  updateAdminContactMessageStatus
+);
 
 export default router;

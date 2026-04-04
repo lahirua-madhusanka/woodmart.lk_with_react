@@ -42,10 +42,10 @@ function Footer() {
         <div>
           <h4 className="font-semibold text-ink">Customer Service</h4>
           <ul className="mt-4 space-y-2 text-sm text-muted">
-            <li><a href="#" className="hover:text-brand">Shipping Policy</a></li>
-            <li><a href="#" className="hover:text-brand">Returns & Refunds</a></li>
-            <li><a href="#" className="hover:text-brand">Order Tracking</a></li>
-            <li><a href="#" className="hover:text-brand">FAQ</a></li>
+            <li><NavLink to="/shipping-policy" className="hover:text-brand">Shipping Policy</NavLink></li>
+            <li><NavLink to="/returns-refunds" className="hover:text-brand">Returns & Refunds</NavLink></li>
+            <li><NavLink to="/order-tracking" className="hover:text-brand">Order Tracking</NavLink></li>
+            <li><NavLink to="/faq" className="hover:text-brand">FAQ</NavLink></li>
           </ul>
         </div>
 

@@ -22,6 +22,10 @@ const AuthPage = lazy(() => import("./pages/AuthPage"));
 const CheckEmailPage = lazy(() => import("./pages/CheckEmailPage"));
 const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
 const AccountPage = lazy(() => import("./pages/AccountPage"));
+const ShippingPolicyPage = lazy(() => import("./pages/ShippingPolicyPage"));
+const ReturnsRefundsPage = lazy(() => import("./pages/ReturnsRefundsPage"));
+const OrderTrackingPage = lazy(() => import("./pages/OrderTrackingPage"));
+const FAQPage = lazy(() => import("./pages/FAQPage"));
 
 // Admin area is split into isolated chunks and loaded only for admin routes.
 const AdminLayout = lazy(() => import("./admin/layout/AdminLayout"));
@@ -35,6 +39,7 @@ const AdminCustomersPage = lazy(() => import("./admin/pages/CustomersPage"));
 const AdminCategoriesPage = lazy(() => import("./admin/pages/CategoriesPage"));
 const AdminReviewsPage = lazy(() => import("./admin/pages/ReviewsPage"));
 const AdminMessagesPage = lazy(() => import("./admin/pages/MessagesPage"));
+const AdminContactInboxPage = lazy(() => import("./admin/pages/ContactInboxPage"));
 const AdminBannersPage = lazy(() => import("./admin/pages/BannersPage"));
 const AdminCouponsPage = lazy(() => import("./admin/pages/CouponsPage"));
 const AdminCustomRequestsPage = lazy(() => import("./admin/pages/CustomRequestsPage"));
@@ -67,6 +72,7 @@ function App() {
         <Route path="categories" element={withSuspense(<AdminCategoriesPage />, "Loading categories...")} />
         <Route path="reviews" element={withSuspense(<AdminReviewsPage />, "Loading reviews...")} />
         <Route path="messages" element={withSuspense(<AdminMessagesPage />, "Loading messages...")} />
+        <Route path="contact" element={withSuspense(<AdminContactInboxPage />, "Loading contact inbox...")} />
         <Route path="custom-requests" element={withSuspense(<AdminCustomRequestsPage />, "Loading custom requests...")} />
         <Route path="banners" element={withSuspense(<AdminBannersPage />, "Loading banners...")} />
         <Route path="coupons" element={withSuspense(<AdminCouponsPage />, "Loading coupons...")} />
@@ -128,6 +134,10 @@ function App() {
         />
         <Route path="about" element={withSuspense(<AboutPage />, "Loading about...")} />
         <Route path="contact" element={withSuspense(<ContactPage />, "Loading contact...")} />
+        <Route path="shipping-policy" element={withSuspense(<ShippingPolicyPage />, "Loading shipping policy...")} />
+        <Route path="returns-refunds" element={withSuspense(<ReturnsRefundsPage />, "Loading returns & refunds...")} />
+        <Route path="order-tracking" element={withSuspense(<OrderTrackingPage />, "Loading order tracking...")} />
+        <Route path="faq" element={withSuspense(<FAQPage />, "Loading FAQ...")} />
         <Route path="custom-project" element={withSuspense(<CustomProjectPage />, "Loading custom project...")} />
         <Route
           path="my-requests"
@@ -140,6 +150,7 @@ function App() {
         <Route path="auth" element={withSuspense(<AuthPage />, "Loading account...")} />
         <Route path="auth/check-email" element={withSuspense(<CheckEmailPage />, "Loading verification details...")} />
         <Route path="auth/verify-email" element={withSuspense(<VerifyEmailPage />, "Verifying email...")} />
+        <Route path="verify-email" element={withSuspense(<VerifyEmailPage />, "Verifying email...")} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

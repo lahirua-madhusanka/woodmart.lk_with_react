@@ -19,6 +19,10 @@ const defaultStoreSettings = {
   supportEmail: "",
   contactNumber: "",
   storeAddress: "",
+  businessHours: "Mon - Sat, 9:00 AM - 7:00 PM",
+  supportNote: "Visit our showroom or contact our team for personalized recommendations.",
+  contactImageUrl:
+    "https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1000&q=80",
   currency: "Rs.",
   freeShippingThreshold: 199,
   themeAccent: "#0959a4",
@@ -125,6 +129,9 @@ const mapStoreSettings = (row = {}) => ({
   supportEmail: row.support_email ?? row.admin_email ?? defaultStoreSettings.supportEmail,
   contactNumber: row.contact_number ?? defaultStoreSettings.contactNumber,
   storeAddress: row.store_address ?? defaultStoreSettings.storeAddress,
+  businessHours: row.business_hours ?? defaultStoreSettings.businessHours,
+  supportNote: row.support_note ?? defaultStoreSettings.supportNote,
+  contactImageUrl: row.contact_image_url ?? defaultStoreSettings.contactImageUrl,
   currency: row.currency ?? defaultStoreSettings.currency,
   freeShippingThreshold: Number(
     row.free_shipping_threshold ?? defaultStoreSettings.freeShippingThreshold
@@ -186,6 +193,10 @@ const buildStoreSettingsPayload = (body = {}) => ({
   support_email: String(body.supportEmail ?? "").trim() || null,
   contact_number: String(body.contactNumber ?? "").trim() || null,
   store_address: String(body.storeAddress ?? "").trim() || null,
+  business_hours: String(body.businessHours ?? defaultStoreSettings.businessHours).trim() || defaultStoreSettings.businessHours,
+  support_note: String(body.supportNote ?? defaultStoreSettings.supportNote).trim() || defaultStoreSettings.supportNote,
+  contact_image_url:
+    String(body.contactImageUrl ?? defaultStoreSettings.contactImageUrl).trim() || defaultStoreSettings.contactImageUrl,
   currency: String(body.currency ?? defaultStoreSettings.currency).trim() || defaultStoreSettings.currency,
   free_shipping_threshold: Math.max(
     0,

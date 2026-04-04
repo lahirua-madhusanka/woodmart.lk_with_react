@@ -137,6 +137,21 @@ alter table public.users alter column email_verified set not null;
 
 create index if not exists idx_users_email_verification_token_hash on public.users(email_verification_token_hash);
 
+create table if not exists public.verification_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  token text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_verification_tokens_token on public.verification_tokens(token);
+create index if not exists idx_verification_tokens_user on public.verification_tokens(user_id);
+create index if not exists idx_verification_tokens_expires_at on public.verification_tokens(expires_at);
+
+create unique index if not exists idx_verification_tokens_user_unique
+  on public.verification_tokens(user_id);
+
 drop trigger if exists trg_users_updated_at on public.users;
 create trigger trg_users_updated_at
 before update on public.users
@@ -619,6 +634,9 @@ create table if not exists public.store_settings (
   support_email text,
   contact_number text,
   store_address text,
+  business_hours text not null default 'Mon - Sat, 9:00 AM - 7:00 PM',
+  support_note text not null default 'Visit our showroom or contact our team for personalized recommendations.',
+  contact_image_url text not null default 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1000&q=80',
   currency text not null default 'Rs.',
   free_shipping_threshold numeric(12,2) not null default 199,
   theme_accent text not null default '#0959a4',
@@ -636,6 +654,9 @@ create table if not exists public.store_settings (
 
 alter table public.store_settings add column if not exists support_email text;
 alter table public.store_settings add column if not exists store_address text;
+alter table public.store_settings add column if not exists business_hours text not null default 'Mon - Sat, 9:00 AM - 7:00 PM';
+alter table public.store_settings add column if not exists support_note text not null default 'Visit our showroom or contact our team for personalized recommendations.';
+alter table public.store_settings add column if not exists contact_image_url text not null default 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1000&q=80';
 alter table public.store_settings add column if not exists hero_title text not null default 'Craft your space with timeless pieces.';
 alter table public.store_settings add column if not exists hero_subtitle text not null default 'Discover premium furniture, decor, and lifestyle objects inspired by natural materials and modern living.';
 alter table public.store_settings add column if not exists hero_primary_button_text text not null default 'Shop Now';
@@ -652,6 +673,30 @@ for each row execute function public.set_updated_at();
 insert into public.store_settings(id)
 values (true)
 on conflict (id) do nothing;
+
+-- Contact inquiries
+create table if not exists public.contact_messages (
+  id uuid primary key default gen_random_uuid(),
+  first_name text not null,
+  last_name text not null,
+  email text not null,
+  subject text not null,
+  message text not null,
+  status text not null default 'new' check (status in ('new', 'read', 'replied')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_contact_messages_status_created
+  on public.contact_messages(status, created_at desc);
+
+create index if not exists idx_contact_messages_email_created
+  on public.contact_messages(email, created_at desc);
+
+drop trigger if exists trg_contact_messages_updated_at on public.contact_messages;
+create trigger trg_contact_messages_updated_at
+before update on public.contact_messages
+for each row execute function public.set_updated_at();
 
 -- Coupons
 create table if not exists public.coupons (
@@ -952,6 +997,7 @@ alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.order_shipping_addresses enable row level security;
 alter table public.user_addresses enable row level security;
+alter table public.verification_tokens enable row level security;
 alter table public.order_status_history enable row level security;
 alter table public.store_settings enable row level security;
 alter table public.chat_conversations enable row level security;
@@ -963,6 +1009,7 @@ alter table public.custom_project_notifications enable row level security;
 alter table public.banners enable row level security;
 alter table public.coupons enable row level security;
 alter table public.coupon_usages enable row level security;
+alter table public.contact_messages enable row level security;
 
 -- Temporary permissive policies for development.
 -- Replace with strict authenticated policies before production.
@@ -992,6 +1039,8 @@ drop policy if exists "dev_all_order_status_history" on public.order_status_hist
 create policy "dev_all_order_status_history" on public.order_status_history for all using (true) with check (true);
 drop policy if exists "dev_all_user_addresses" on public.user_addresses;
 create policy "dev_all_user_addresses" on public.user_addresses for all using (true) with check (true);
+drop policy if exists "dev_all_verification_tokens" on public.verification_tokens;
+create policy "dev_all_verification_tokens" on public.verification_tokens for all using (true) with check (true);
 drop policy if exists "dev_all_store_settings" on public.store_settings;
 create policy "dev_all_store_settings" on public.store_settings for all using (true) with check (true);
 drop policy if exists "dev_all_banners" on public.banners;
@@ -1000,6 +1049,8 @@ drop policy if exists "dev_all_coupons" on public.coupons;
 create policy "dev_all_coupons" on public.coupons for all using (true) with check (true);
 drop policy if exists "dev_all_coupon_usages" on public.coupon_usages;
 create policy "dev_all_coupon_usages" on public.coupon_usages for all using (true) with check (true);
+drop policy if exists "dev_all_contact_messages" on public.contact_messages;
+create policy "dev_all_contact_messages" on public.contact_messages for all using (true) with check (true);
 drop policy if exists "dev_all_chat_conversations" on public.chat_conversations;
 create policy "dev_all_chat_conversations" on public.chat_conversations for all using (true) with check (true);
 drop policy if exists "dev_all_chat_messages" on public.chat_messages;
