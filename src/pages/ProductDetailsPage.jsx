@@ -2,6 +2,7 @@ import { Heart, Minus, Plus, ShieldCheck, ShoppingBag, Star, Truck } from "lucid
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
+import DOMPurify from "dompurify";
 import ProductGrid from "../components/products/ProductGrid";
 import { useStore } from "../context/StoreContext";
 import { useAuth } from "../context/AuthContext";
@@ -13,6 +14,32 @@ import {
   getReviewEligibilityApi,
   updateProductReviewApi,
 } from "../services/productService";
+
+const DESCRIPTION_SANITIZE_OPTIONS = {
+  ALLOWED_TAGS: ["p", "br", "ul", "ol", "li", "strong", "b", "em", "i", "u", "a", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "code", "pre", "span"],
+  ALLOWED_ATTR: ["href", "target", "rel", "title"],
+};
+
+const escapeHtml = (value) =>
+  String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const isLikelyHtml = (value) => /<[^>]+>/.test(String(value || ""));
+
+const renderSanitizedDescription = (value) => {
+  const rawValue = String(value || "");
+  const content = isLikelyHtml(rawValue)
+    ? rawValue
+    : escapeHtml(rawValue).replace(/\r\n|\r|\n/g, "<br />");
+
+  return {
+    __html: DOMPurify.sanitize(content, DESCRIPTION_SANITIZE_OPTIONS),
+  };
+};
 
 function ProductDetailsPage() {
   const { id } = useParams();
@@ -368,8 +395,6 @@ function ProductDetailsPage() {
             )}
           </div>
 
-          <p className="mt-5 text-sm leading-relaxed text-muted">{product.description}</p>
-
           <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
             <span className={`rounded-full px-2 py-1 font-semibold ${inStock ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
               {inStock ? "In stock" : "Out of stock"}
@@ -476,10 +501,10 @@ function ProductDetailsPage() {
           </button>
         </div>
         {activeTab === "description" ? (
-          <p className="text-sm leading-relaxed text-muted">
-            {product.description} Designed with comfort, longevity, and easy styling
-            in mind. Each item is finished and quality-checked by our partner studios.
-          </p>
+          <div
+            className="text-sm leading-relaxed text-muted prose prose-slate max-w-none"
+            dangerouslySetInnerHTML={renderSanitizedDescription(product.description)}
+          />
         ) : activeTab === "additional" ? (
           <div className="grid gap-3 text-sm text-muted sm:grid-cols-2">
             <div className="rounded-lg bg-slate-50 p-3"><span className="font-semibold text-ink">SKU:</span> {sku}</div>

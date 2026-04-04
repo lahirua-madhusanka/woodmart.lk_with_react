@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getApiErrorMessage } from "../services/apiClient";
 import { evaluatePasswordStrength } from "../utils/passwordStrength";
@@ -267,7 +267,7 @@ function AuthPage() {
 
             {mode === "login" && (
               <p className="text-sm text-muted">
-                Forgot your password? <button type="button" className="font-semibold text-brand">Reset here</button>
+                Forgot your password? <Link to="/auth/forgot-password" className="font-semibold text-brand">Reset here</Link>
               </p>
             )}
 

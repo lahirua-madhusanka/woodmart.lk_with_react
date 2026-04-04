@@ -2,7 +2,12 @@ import { Search, Loader2, Mail, CheckCircle2, MailCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { getApiErrorMessage } from "../../services/apiClient";
-import { getContactInquiries, updateContactMessageStatus } from "../services/contactInboxService";
+import {
+  getContactInquiries,
+  getContactInquiryById,
+  replyToContactInquiry,
+  updateContactMessageStatus,
+} from "../services/contactInboxService";
 
 const formatDate = (value) => {
   if (!value) return "";
@@ -44,11 +49,14 @@ const getStatusIcon = (status) => {
 
 function ContactInboxPage() {
   const [loading, setLoading] = useState(true);
+  const [loadingSelected, setLoadingSelected] = useState(false);
   const [updating, setUpdating] = useState(null);
+  const [sendingReply, setSendingReply] = useState(false);
   const [inquiries, setInquiries] = useState([]);
   const [selectedInquiryId, setSelectedInquiryId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [replyMessage, setReplyMessage] = useState("");
   const [replyNote, setReplyNote] = useState("");
 
   const selectedInquiry = useMemo(
@@ -76,6 +84,35 @@ function ContactInboxPage() {
     loadInquiries();
   }, [loadInquiries]);
 
+  useEffect(() => {
+    if (!selectedInquiryId) {
+      return;
+    }
+
+    const loadSelectedInquiry = async () => {
+      setLoadingSelected(true);
+      try {
+        const data = await getContactInquiryById(selectedInquiryId);
+        setInquiries((prev) => prev.map((item) => (item.id === selectedInquiryId ? data : item)));
+      } catch (error) {
+        toast.error(getApiErrorMessage(error));
+      } finally {
+        setLoadingSelected(false);
+      }
+    };
+
+    loadSelectedInquiry();
+  }, [selectedInquiryId]);
+
+  useEffect(() => {
+    if (!selectedInquiry) {
+      return;
+    }
+
+    setReplyMessage(selectedInquiry.adminReply || "");
+    setReplyNote(selectedInquiry.internalNote || "");
+  }, [selectedInquiry?.id]);
+
   const handleStatusChange = useCallback(
     async (newStatus) => {
       if (!selectedInquiry?.id) return;
@@ -96,19 +133,37 @@ function ContactInboxPage() {
     [selectedInquiry?.id]
   );
 
-  const handleReplyNoteSubmit = () => {
-    if (!replyNote.trim()) {
-      toast.warning("Please enter a reply note");
+  const handleReplyNoteSubmit = async () => {
+    if (!selectedInquiry?.id) {
       return;
     }
 
-    // Change status to 'replied' and add note
-    handleStatusChange("replied");
-    // In a real scenario, you'd also save the reply note text somewhere
-    // For now, just mark as replied
-    toast.success("Marked as replied");
-    setReplyNote("");
+    if (!replyMessage.trim()) {
+      toast.warning("Please enter a reply message");
+      return;
+    }
+
+    setSendingReply(true);
+    try {
+      const result = await replyToContactInquiry(selectedInquiry.id, {
+        replyMessage: replyMessage.trim(),
+        internalNote: replyNote.trim() || null,
+      });
+
+      setInquiries((prev) =>
+        prev.map((item) => (item.id === selectedInquiry.id ? result.inquiry : item))
+      );
+      toast.success("Reply sent to customer successfully");
+      setReplyMessage("");
+      setReplyNote("");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setSendingReply(false);
+    }
   };
+
+  const isBusy = updating === selectedInquiry?.id || sendingReply || loadingSelected;
 
   if (loading) {
     return (
@@ -221,6 +276,19 @@ function ContactInboxPage() {
               <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-700">
                 {selectedInquiry.message}
               </div>
+              {selectedInquiry.adminReply ? (
+                <div className="mt-4">
+                  <h4 className="mb-2 text-sm font-semibold text-slate-900">Latest Reply</h4>
+                  <div className="whitespace-pre-wrap rounded-lg bg-blue-50 p-4 text-sm text-slate-800">
+                    {selectedInquiry.adminReply}
+                  </div>
+                  {selectedInquiry.repliedAt ? (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Replied at {formatDate(selectedInquiry.repliedAt)}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             {/* Status actions */}
@@ -229,7 +297,7 @@ function ContactInboxPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => handleStatusChange("read")}
-                  disabled={updating === selectedInquiry.id}
+                  disabled={isBusy || selectedInquiry.status === "read"}
                   className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                 >
                   {updating === selectedInquiry.id && <Loader2 size={14} className="animate-spin" />}
@@ -238,7 +306,7 @@ function ContactInboxPage() {
                 </button>
                 <button
                   onClick={() => handleStatusChange("replied")}
-                  disabled={updating === selectedInquiry.id}
+                  disabled={isBusy || selectedInquiry.status === "replied"}
                   className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
                 >
                   {updating === selectedInquiry.id && <Loader2 size={14} className="animate-spin" />}
@@ -250,23 +318,30 @@ function ContactInboxPage() {
 
             {/* Reply note section */}
             <div className="p-6">
-              <h3 className="mb-3 font-semibold text-slate-900">Reply Note</h3>
+              <h3 className="mb-3 font-semibold text-slate-900">Reply</h3>
               <p className="mb-3 text-xs text-slate-500">
-                Add a note about your reply or follow-up action (this is for internal reference only)
+                Write a response to the customer, then optionally add an internal note.
               </p>
               <div className="mb-3 flex flex-col gap-2">
                 <textarea
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
+                  placeholder="Type your reply to the customer..."
+                  className="h-28 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                />
+                <textarea
                   value={replyNote}
                   onChange={(e) => setReplyNote(e.target.value)}
-                  placeholder="Type your internal reply note here..."
+                  placeholder="Type your internal follow-up note (optional)..."
                   className="h-24 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
                 />
               </div>
               <button
                 onClick={handleReplyNoteSubmit}
-                disabled={!replyNote.trim()}
+                disabled={!replyMessage.trim() || isBusy}
                 className="flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
               >
+                {sendingReply ? <Loader2 size={14} className="animate-spin" /> : null}
                 <MailCheck size={16} />
                 Send Reply & Update Status
               </button>

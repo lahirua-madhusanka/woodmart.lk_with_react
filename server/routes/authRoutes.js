@@ -2,13 +2,16 @@ import { body } from "express-validator";
 import express from "express";
 import {
   changePassword,
+  forgotPassword,
   getProfile,
   loginUser,
   logoutUser,
   registerUser,
   registerAdmin,
+  resetPasswordWithToken,
   resendVerificationEmail,
   updateProfile,
+  validateResetPasswordToken,
   verifyEmail,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
@@ -50,6 +53,22 @@ router.post(
 
 router.get("/verify-email", verifyEmail);
 router.post("/verify-email", verifyEmail);
+router.post(
+  "/forgot-password",
+  [body("email").isEmail().withMessage("Valid email is required")],
+  validateRequest,
+  forgotPassword
+);
+router.get("/reset-password", validateResetPasswordToken);
+router.post(
+  "/reset-password",
+  [
+    body("token").notEmpty().withMessage("Reset token is required"),
+    body("newPassword").isLength({ min: 8 }).withMessage("Password must be at least 8 characters"),
+  ],
+  validateRequest,
+  resetPasswordWithToken
+);
 router.post(
   "/resend-verification",
   [body("email").isEmail().withMessage("Valid email is required")],

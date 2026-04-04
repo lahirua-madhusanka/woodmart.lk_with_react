@@ -24,6 +24,10 @@ export function put(path, payload) {
   return adminApiClient.put(path, payload);
 }
 
+export function patch(path, payload) {
+  return adminApiClient.patch(path, payload);
+}
+
 export function del(path, payload) {
   if (payload) {
     return adminApiClient.delete(path, { data: payload });

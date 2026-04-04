@@ -42,3 +42,20 @@ export const resendVerificationApi = async (payload) => {
   const { data } = await apiClient.post("/auth/resend-verification", payload);
   return data;
 };
+
+export const forgotPasswordApi = async (payload) => {
+  const { data } = await apiClient.post("/auth/forgot-password", payload);
+  return data;
+};
+
+export const validateResetPasswordTokenApi = async (token) => {
+  const { data } = await apiClient.get("/auth/reset-password", {
+    params: { token },
+  });
+  return data;
+};
+
+export const resetPasswordApi = async (payload) => {
+  const { data } = await apiClient.post("/auth/reset-password", payload);
+  return data;
+};

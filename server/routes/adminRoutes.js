@@ -1,4 +1,4 @@
-import { body } from "express-validator";
+import { body, param } from "express-validator";
 import express from "express";
 import multer from "multer";
 import {
@@ -32,7 +32,9 @@ import {
   updateAdminCoupon,
 } from "../controllers/couponController.js";
 import {
+  getAdminContactMessageById,
   getAdminContactMessages,
+  replyAdminContactMessage,
   updateAdminContactMessageStatus,
 } from "../controllers/contactController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
@@ -306,11 +308,47 @@ router.put(
 router.delete("/coupons/:id", deleteAdminCoupon);
 
 router.get("/contact-messages", getAdminContactMessages);
+router.get(
+  "/contact-messages/:id",
+  [param("id").isUUID().withMessage("Invalid inquiry id")],
+  validateRequest,
+  getAdminContactMessageById
+);
 router.patch(
   "/contact-messages/:id/status",
-  [body("status").trim().isIn(["new", "read", "replied"]).withMessage("Invalid contact message status")],
+  [
+    param("id").isUUID().withMessage("Invalid inquiry id"),
+    body("status").trim().isIn(["new", "read", "replied"]).withMessage("Invalid contact message status"),
+  ],
   validateRequest,
   updateAdminContactMessageStatus
+);
+router.put(
+  "/contact-messages/:id",
+  [
+    param("id").isUUID().withMessage("Invalid inquiry id"),
+    body("status").trim().isIn(["new", "read", "replied"]).withMessage("Invalid contact message status"),
+  ],
+  validateRequest,
+  updateAdminContactMessageStatus
+);
+router.post(
+  "/contact-messages/:id/reply",
+  [
+    param("id").isUUID().withMessage("Invalid inquiry id"),
+    body("replyMessage")
+      .trim()
+      .notEmpty()
+      .withMessage("Reply message is required")
+      .isLength({ max: 5000 })
+      .withMessage("Reply message must be at most 5000 characters"),
+    body("internalNote")
+      .optional({ nullable: true })
+      .isLength({ max: 2000 })
+      .withMessage("Internal note must be at most 2000 characters"),
+  ],
+  validateRequest,
+  replyAdminContactMessage
 );
 
 export default router;

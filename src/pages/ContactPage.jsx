@@ -1,10 +1,25 @@
 import { Clock3, Mail, MapPin, Phone } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import { useStorefrontSettings } from "../context/StorefrontSettingsContext";
 import { getApiErrorMessage } from "../services/apiClient";
 import { submitContactInquiryApi } from "../services/contactService";
 
+const splitName = (name = "") => {
+  const normalized = String(name || "").trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return { firstName: "", lastName: "" };
+  }
+
+  const [firstName, ...rest] = normalized.split(" ");
+  return {
+    firstName: firstName || "",
+    lastName: rest.join(" "),
+  };
+};
+
 function ContactPage() {
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { settings } = useStorefrontSettings();
   const [form, setForm] = useState({
     firstName: "",
@@ -16,6 +31,33 @@ function ContactPage() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitState, setSubmitState] = useState({ type: "", message: "" });
+  const [touchedIdentity, setTouchedIdentity] = useState({
+    firstName: false,
+    lastName: false,
+    email: false,
+  });
+
+  const identityDefaults = useMemo(() => {
+    const nameParts = splitName(user?.name || "");
+    return {
+      firstName: String(user?.firstName || nameParts.firstName || "").trim(),
+      lastName: String(user?.lastName || nameParts.lastName || "").trim(),
+      email: String(user?.email || "").trim().toLowerCase(),
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      firstName: touchedIdentity.firstName ? prev.firstName : prev.firstName || identityDefaults.firstName,
+      lastName: touchedIdentity.lastName ? prev.lastName : prev.lastName || identityDefaults.lastName,
+      email: touchedIdentity.email ? prev.email : prev.email || identityDefaults.email,
+    }));
+  }, [authLoading, identityDefaults, isAuthenticated, touchedIdentity.email, touchedIdentity.firstName, touchedIdentity.lastName]);
 
   const storeInfo = useMemo(
     () => ({
@@ -36,6 +78,9 @@ function ContactPage() {
 
   const setField = (key) => (event) => {
     const value = event.target.value;
+    if (key === "firstName" || key === "lastName" || key === "email") {
+      setTouchedIdentity((prev) => ({ ...prev, [key]: true }));
+    }
     setForm((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => {
       if (!prev[key]) return prev;
@@ -83,7 +128,13 @@ function ContactPage() {
         type: "success",
         message: response?.message || "Message sent successfully.",
       });
-      setForm({ firstName: "", lastName: "", email: "", subject: "", message: "" });
+      setForm((prev) => ({
+        firstName: isAuthenticated ? prev.firstName : "",
+        lastName: isAuthenticated ? prev.lastName : "",
+        email: isAuthenticated ? prev.email : "",
+        subject: "",
+        message: "",
+      }));
       setErrors({});
     } catch (error) {
       setSubmitState({

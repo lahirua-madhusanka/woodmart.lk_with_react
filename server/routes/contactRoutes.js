@@ -1,12 +1,27 @@
 import express from "express";
-import { body } from "express-validator";
-import { submitContactMessage } from "../controllers/contactController.js";
+import { body, param } from "express-validator";
+import {
+  deleteCustomerContactMessage,
+  getCustomerContactMessages,
+  submitContactMessage,
+} from "../controllers/contactController.js";
 import { validateRequest } from "../middleware/validateMiddleware.js";
+import { optionalProtect, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
+router.get("/my-inquiries", protect, getCustomerContactMessages);
+router.delete(
+  "/my-inquiries/:id",
+  protect,
+  [param("id").isUUID().withMessage("Invalid inquiry id")],
+  validateRequest,
+  deleteCustomerContactMessage
+);
+
 router.post(
   "/",
+  optionalProtect,
   [
     body("firstName").trim().notEmpty().withMessage("First name is required").isLength({ max: 80 }),
     body("lastName").trim().notEmpty().withMessage("Last name is required").isLength({ max: 80 }),

@@ -152,6 +152,21 @@ create index if not exists idx_verification_tokens_expires_at on public.verifica
 create unique index if not exists idx_verification_tokens_user_unique
   on public.verification_tokens(user_id);
 
+create table if not exists public.password_reset_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  token text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_password_reset_tokens_token on public.password_reset_tokens(token);
+create index if not exists idx_password_reset_tokens_user on public.password_reset_tokens(user_id);
+create index if not exists idx_password_reset_tokens_expires_at on public.password_reset_tokens(expires_at);
+
+create unique index if not exists idx_password_reset_tokens_user_unique
+  on public.password_reset_tokens(user_id);
+
 drop trigger if exists trg_users_updated_at on public.users;
 create trigger trg_users_updated_at
 before update on public.users
@@ -677,21 +692,35 @@ on conflict (id) do nothing;
 -- Contact inquiries
 create table if not exists public.contact_messages (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.users(id) on delete set null,
   first_name text not null,
   last_name text not null,
   email text not null,
   subject text not null,
   message text not null,
   status text not null default 'new' check (status in ('new', 'read', 'replied')),
+  admin_reply text,
+  replied_at timestamptz,
+  replied_by uuid,
+  internal_note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.contact_messages add column if not exists user_id uuid references public.users(id) on delete set null;
+alter table public.contact_messages add column if not exists admin_reply text;
+alter table public.contact_messages add column if not exists replied_at timestamptz;
+alter table public.contact_messages add column if not exists replied_by uuid;
+alter table public.contact_messages add column if not exists internal_note text;
 
 create index if not exists idx_contact_messages_status_created
   on public.contact_messages(status, created_at desc);
 
 create index if not exists idx_contact_messages_email_created
   on public.contact_messages(email, created_at desc);
+
+create index if not exists idx_contact_messages_user_id_created
+  on public.contact_messages(user_id, created_at desc);
 
 drop trigger if exists trg_contact_messages_updated_at on public.contact_messages;
 create trigger trg_contact_messages_updated_at
@@ -998,6 +1027,7 @@ alter table public.order_items enable row level security;
 alter table public.order_shipping_addresses enable row level security;
 alter table public.user_addresses enable row level security;
 alter table public.verification_tokens enable row level security;
+alter table public.password_reset_tokens enable row level security;
 alter table public.order_status_history enable row level security;
 alter table public.store_settings enable row level security;
 alter table public.chat_conversations enable row level security;
@@ -1041,6 +1071,8 @@ drop policy if exists "dev_all_user_addresses" on public.user_addresses;
 create policy "dev_all_user_addresses" on public.user_addresses for all using (true) with check (true);
 drop policy if exists "dev_all_verification_tokens" on public.verification_tokens;
 create policy "dev_all_verification_tokens" on public.verification_tokens for all using (true) with check (true);
+drop policy if exists "dev_all_password_reset_tokens" on public.password_reset_tokens;
+create policy "dev_all_password_reset_tokens" on public.password_reset_tokens for all using (true) with check (true);
 drop policy if exists "dev_all_store_settings" on public.store_settings;
 create policy "dev_all_store_settings" on public.store_settings for all using (true) with check (true);
 drop policy if exists "dev_all_banners" on public.banners;

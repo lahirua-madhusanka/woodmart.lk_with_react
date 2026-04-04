@@ -5,10 +5,11 @@ import crypto from "node:crypto";
 import env from "../config/env.js";
 import supabase from "../config/supabase.js";
 import { mapProduct, mapUser } from "../utils/dbMappers.js";
-import { sendVerificationEmail } from "../utils/email.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../utils/email.js";
 
 const signToken = (id) => jwt.sign({ id }, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
 const EMAIL_VERIFICATION_TTL_HOURS = 1;
+const PASSWORD_RESET_TTL_HOURS = 1;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 const resendGuard = new Map();
 const recentVerifiedTokens = new Map();
@@ -35,6 +36,39 @@ const createVerificationToken = () => {
 
 const buildVerificationUrl = (token) =>
   `${env.clientUrl}/verify-email?token=${encodeURIComponent(token)}`;
+
+const buildPasswordResetUrl = (token) =>
+  `${env.clientUrl}/reset-password?token=${encodeURIComponent(token)}`;
+
+const isStrongPassword = (password) => {
+  const value = String(password || "");
+  return (
+    value.length >= 8 &&
+    /[A-Z]/.test(value) &&
+    /[a-z]/.test(value) &&
+    /\d/.test(value) &&
+    /[^A-Za-z0-9]/.test(value)
+  );
+};
+
+const createPasswordResetToken = () => {
+  const token = crypto.randomBytes(32).toString("hex");
+  const tokenHash = hashVerificationToken(token);
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_HOURS * 60 * 60 * 1000).toISOString();
+
+  return {
+    token,
+    tokenHash,
+    expiresAt,
+  };
+};
+
+const invalidOrExpiredResetError = (res) => {
+  if (res && typeof res.status === "function") {
+    res.status(400);
+  }
+  throw new Error("Reset link is invalid or expired");
+};
 
 const persistVerificationToken = async ({ userId, tokenHash, expiresAt }) => {
   await supabase.from("verification_tokens").delete().eq("user_id", userId);
@@ -390,6 +424,182 @@ export const changePassword = asyncHandler(async (req, res) => {
   }
 
   res.json({ message: "Password updated successfully" });
+});
+
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const normalizedEmail = String(req.body.email || "").trim().toLowerCase();
+  const genericMessage = "If an account exists for this email, a password reset link has been sent.";
+
+  if (!normalizedEmail) {
+    return res.json({ message: genericMessage });
+  }
+
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("id, name, email, password_hash")
+    .eq("email", normalizedEmail)
+    .maybeSingle();
+
+  if (userError) {
+    return res.json({ message: genericMessage });
+  }
+
+  if (!user || !user.password_hash || user.password_hash === "SUPABASE_AUTH_MANAGED") {
+    return res.json({ message: genericMessage });
+  }
+
+  try {
+    const { token, tokenHash, expiresAt } = createPasswordResetToken();
+
+    await supabase.from("password_reset_tokens").delete().eq("user_id", user.id);
+
+    const { error: tokenError } = await supabase.from("password_reset_tokens").insert({
+      user_id: user.id,
+      token: tokenHash,
+      expires_at: expiresAt,
+    });
+
+    if (tokenError) {
+      return res.json({ message: genericMessage });
+    }
+
+    await sendPasswordResetEmail({
+      toEmail: user.email,
+      name: user.name,
+      resetUrl: buildPasswordResetUrl(token),
+    });
+  } catch {
+    // Intentionally return a generic response to avoid account enumeration.
+  }
+
+  return res.json({ message: genericMessage });
+});
+
+export const validateResetPasswordToken = asyncHandler(async (req, res) => {
+  const token = String(req.query.token || "").trim();
+
+  if (!token) {
+    res.status(400);
+    throw new Error("Reset link is invalid or expired");
+  }
+
+  const tokenHash = hashVerificationToken(token);
+  const { data: tokenRow, error } = await supabase
+    .from("password_reset_tokens")
+    .select("id, user_id, expires_at")
+    .eq("token", tokenHash)
+    .maybeSingle();
+
+  if (error) {
+    res.status(500);
+    throw new Error(error.message);
+  }
+
+  if (!tokenRow) {
+    res.status(400);
+    throw new Error("Reset link is invalid or expired");
+  }
+
+  const expiresAt = tokenRow.expires_at ? new Date(tokenRow.expires_at) : null;
+  if (!expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
+    await supabase.from("password_reset_tokens").delete().eq("id", tokenRow.id);
+    res.status(400);
+    throw new Error("Reset link is invalid or expired");
+  }
+
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", tokenRow.user_id)
+    .maybeSingle();
+
+  if (userError) {
+    res.status(500);
+    throw new Error(userError.message);
+  }
+
+  if (!user) {
+    await supabase.from("password_reset_tokens").delete().eq("id", tokenRow.id);
+    res.status(400);
+    throw new Error("Reset link is invalid or expired");
+  }
+
+  return res.json({
+    success: true,
+    status: "valid",
+    message: "Reset link is valid",
+  });
+});
+
+export const resetPasswordWithToken = asyncHandler(async (req, res) => {
+  const token = String(req.body.token || "").trim();
+  const newPassword = String(req.body.newPassword || "");
+
+  if (!token) {
+    res.status(400);
+    throw new Error("Reset link is invalid or expired");
+  }
+
+  if (!isStrongPassword(newPassword)) {
+    res.status(400);
+    throw new Error("Password must be at least 8 characters and include uppercase, lowercase, number, and special character");
+  }
+
+  const tokenHash = hashVerificationToken(token);
+  const { data: tokenRow, error } = await supabase
+    .from("password_reset_tokens")
+    .select("id, user_id, expires_at")
+    .eq("token", tokenHash)
+    .maybeSingle();
+
+  if (error) {
+    res.status(500);
+    throw new Error(error.message);
+  }
+
+  if (!tokenRow) {
+    invalidOrExpiredResetError(res);
+  }
+
+  const expiresAt = tokenRow.expires_at ? new Date(tokenRow.expires_at) : null;
+  if (!expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
+    await supabase.from("password_reset_tokens").delete().eq("id", tokenRow.id);
+    invalidOrExpiredResetError(res);
+  }
+
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", tokenRow.user_id)
+    .maybeSingle();
+
+  if (userError) {
+    res.status(500);
+    throw new Error(userError.message);
+  }
+
+  if (!user) {
+    await supabase.from("password_reset_tokens").delete().eq("id", tokenRow.id);
+    invalidOrExpiredResetError(res);
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const { error: updateError } = await supabase
+    .from("users")
+    .update({ password_hash: passwordHash })
+    .eq("id", user.id);
+
+  if (updateError) {
+    res.status(500);
+    throw new Error(updateError.message);
+  }
+
+  await supabase.from("password_reset_tokens").delete().eq("user_id", user.id);
+
+  return res.json({
+    success: true,
+    message: "Password reset successful. You can now log in with your new password.",
+  });
 });
 
 export const verifyEmail = asyncHandler(async (req, res) => {

@@ -14,8 +14,7 @@ function CartPage() {
   const { settings, formatMoney } = useStorefrontSettings();
 
   const freeShippingThreshold = Number(settings.freeShippingThreshold || 0);
-  const baseShipping = Number(cartShippingTotal || 0);
-  const shipping = cartSubtotal > freeShippingThreshold || cartSubtotal === 0 ? 0 : baseShipping;
+  const shipping = Number(cartShippingTotal || 0);
   const total = cartSubtotal + shipping;
 
   return (
@@ -81,9 +80,7 @@ function CartPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">Shipping</span>
-                <span className="font-semibold">
-                  {shipping === 0 ? "Free" : formatMoney(shipping)}
-                </span>
+                <span className="font-semibold">{formatMoney(shipping)}</span>
               </div>
               <div className="flex justify-between border-t border-slate-200 pt-2 text-base">
                 <span className="font-semibold">Total</span>

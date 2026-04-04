@@ -35,7 +35,8 @@ function Footer() {
             <li><NavLink to="/shop" className="hover:text-brand">Shop All</NavLink></li>
             <li><NavLink to="/about" className="hover:text-brand">About</NavLink></li>
             <li><NavLink to="/contact" className="hover:text-brand">Contact</NavLink></li>
-            <li><NavLink to="/auth" className="hover:text-brand">My Account</NavLink></li>
+            <li><NavLink to="/account" className="hover:text-brand">My Account</NavLink></li>
+            <li><NavLink to="/my-inquiries" className="hover:text-brand">My Inquiries</NavLink></li>
           </ul>
         </div>
 
