@@ -1,28 +1,13 @@
 {
-  "name": "woodmart",
-  "version": "1.0.0",
-  "description": "Premium React ecommerce storefront",
+  "name": "woodmart-frontend-user",
   "private": true,
+  "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "dev:user": "npm run dev --prefix frontend-user",
-    "dev:admin": "npm run dev --prefix frontend-admin",
-    "server": "npm run dev --prefix server",
-    "dev:full": "concurrently \"npm run server\" \"npm run dev:user\" \"npm run dev:admin\"",
     "build": "vite build",
-    "build:user": "npm run build --prefix frontend-user",
-    "build:admin": "npm run build --prefix frontend-admin",
     "preview": "vite preview"
   },
-  "keywords": [
-    "react",
-    "ecommerce",
-    "tailwind",
-    "vite"
-  ],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
   "dependencies": {
     "@stripe/react-stripe-js": "^6.0.0",
     "@stripe/stripe-js": "^9.0.0",
@@ -39,7 +24,6 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.27",
-    "concurrently": "^9.2.1",
     "postcss": "^8.5.8",
     "tailwindcss": "^3.4.17",
     "vite": "^8.0.3"
