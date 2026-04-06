@@ -5,13 +5,13 @@
   "private": true,
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "dev:user": "npm run dev --prefix frontend-user",
-    "dev:admin": "npm run dev --prefix frontend-admin",
+    "dev:user": "vite --config frontend-user/vite.config.js --host 0.0.0.0",
+    "dev:admin": "vite --config frontend-admin/vite.config.js --host 0.0.0.0",
     "server": "npm run dev --prefix server",
     "dev:full": "concurrently \"npm run server\" \"npm run dev:user\" \"npm run dev:admin\"",
     "build": "vite build",
-    "build:user": "npm run build --prefix frontend-user",
-    "build:admin": "npm run build --prefix frontend-admin",
+    "build:user": "vite build --config frontend-user/vite.config.js",
+    "build:admin": "vite build --config frontend-admin/vite.config.js",
     "preview": "vite preview"
   },
   "keywords": [

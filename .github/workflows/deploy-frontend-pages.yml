@@ -1,4 +1,4 @@
-name: Deploy Frontend To GitHub Pages
+name: Deploy User Frontend To GitHub Pages
 
 on:
   push:
@@ -41,15 +41,15 @@ jobs:
             echo "VITE_BASE_PATH=/$REPO_NAME/" >> "$GITHUB_ENV"
           fi
 
-      - name: Build frontend
+      - name: Build user frontend
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_SOCKET_URL: ${{ secrets.VITE_SOCKET_URL }}
           VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
-        run: npm run build
+        run: npm run build:user
 
       - name: SPA fallback for GitHub Pages
-        run: cp dist/index.html dist/404.html
+        run: cp frontend-user/dist/index.html frontend-user/dist/404.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -57,7 +57,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: frontend-user/dist
 
   deploy:
     environment:
