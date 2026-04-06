@@ -25,22 +25,26 @@ import wishlistRoutes from "./routes/wishlistRoutes.js";
 
 const app = express();
 const server = http.createServer(app);
-const io = new SocketIOServer(server, {
-  cors: {
-    origin: env.clientUrl,
-    credentials: true,
+const allowedOrigins = [env.clientUrl, ...env.clientUrls].filter(Boolean);
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("CORS origin denied"));
   },
+  credentials: true,
+};
+
+const io = new SocketIOServer(server, {
+  cors: corsOptions,
 });
 
 app.locals.io = io;
 
 app.use(helmet());
-app.use(
-  cors({
-    origin: env.clientUrl,
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
 app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());

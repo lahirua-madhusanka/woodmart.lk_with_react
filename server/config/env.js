@@ -19,6 +19,10 @@ const env = {
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
+  clientUrls: String(process.env.CLIENT_URLS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || "",
   smtpHost: process.env.SMTP_HOST || "",
   smtpPort: Number(process.env.SMTP_PORT || 587),
