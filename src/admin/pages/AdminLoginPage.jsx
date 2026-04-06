@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { useAuth } from "../../context/AuthContext";
+import { useAdminAuth } from "../../context/AdminAuthContext";
 import { getApiErrorMessage } from "../../services/apiClient";
 
 function AdminLoginPage() {
-  const { login, logout } = useAuth();
+  const { login } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
@@ -18,13 +18,7 @@ function AdminLoginPage() {
 
     setLoading(true);
     try {
-      const user = await login({ email, password });
-      if (user?.role !== "admin") {
-        await logout();
-        toast.error("Admin access required");
-        return;
-      }
-
+      await login({ email, password });
       const redirectTo = location.state?.from || "/admin/dashboard";
       navigate(redirectTo, { replace: true });
     } catch (error) {

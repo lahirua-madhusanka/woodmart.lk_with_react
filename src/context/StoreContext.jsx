@@ -160,12 +160,23 @@ export function StoreProvider({ children }) {
         .map(([id, quantity]) => {
           const product = products.find((item) => getProductId(item) === String(id));
           if (!product) return null;
-          const unitPrice = Number(product.discountPrice || product.price || 0);
+          const listPrice = Number(product.price || 0);
+          const unitPrice = Number(product.discountPrice ?? product.price ?? 0);
+          const unitDiscountAmount = Math.max(0, listPrice - unitPrice);
+          const unitShippingPrice = Number(product.shippingPrice || 0);
+          const quantityValue = Number(quantity || 0);
           return {
             ...product,
             productId: getProductId(product),
-            quantity,
-            subtotal: quantity * unitPrice,
+            quantity: quantityValue,
+            listPrice,
+            unitPrice,
+            unitDiscountAmount,
+            unitShippingPrice,
+            subtotal: quantityValue * unitPrice,
+            shippingSubtotal: quantityValue * unitShippingPrice,
+            discountSubtotal: quantityValue * unitDiscountAmount,
+            lineTotal: quantityValue * (unitPrice + unitShippingPrice),
           };
         })
         .filter(Boolean),
@@ -182,6 +193,16 @@ export function StoreProvider({ children }) {
     [cartDetailedItems]
   );
 
+  const cartShippingTotal = useMemo(
+    () => cartDetailedItems.reduce((sum, item) => sum + Number(item.shippingSubtotal || 0), 0),
+    [cartDetailedItems]
+  );
+
+  const cartDiscountTotal = useMemo(
+    () => cartDetailedItems.reduce((sum, item) => sum + Number(item.discountSubtotal || 0), 0),
+    [cartDetailedItems]
+  );
+
   const wishlistItems = useMemo(
     () => products.filter((product) => wishlist.includes(getProductId(product))),
     [getProductId, products, wishlist]
@@ -192,6 +213,8 @@ export function StoreProvider({ children }) {
     cartDetailedItems,
     cartCount,
     cartSubtotal,
+    cartShippingTotal,
+    cartDiscountTotal,
     products,
     loadingProducts,
     syncing,

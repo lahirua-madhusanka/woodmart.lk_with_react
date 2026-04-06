@@ -1,9 +1,9 @@
 import { LogOut, Menu } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAdminAuth } from "../../context/AdminAuthContext";
 
 function Topbar({ onToggleMobile }) {
-  const { logout } = useAuth();
+  const { logout } = useAdminAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {

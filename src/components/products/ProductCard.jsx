@@ -3,10 +3,12 @@ import { motion } from "framer-motion";
 import { Heart, ShoppingCart, Star } from "lucide-react";
 import RoutePrefetchLink from "../common/RoutePrefetchLink";
 import { usePrefetchOnHover, usePrefetchTrigger } from "../../hooks/usePrefetchOnHover";
+import { useStorefrontSettings } from "../../context/StorefrontSettingsContext";
 import { useStore } from "../../context/StoreContext";
 
 function ProductCard({ product }) {
   const { addToCart, getProductId, toggleWishlist, wishlist } = useStore();
+  const { formatMoney } = useStorefrontSettings();
   const [imageLoaded, setImageLoaded] = useState(false);
   const productId = getProductId(product);
   const inWishlist = wishlist.includes(productId);
@@ -15,6 +17,12 @@ function ProductCard({ product }) {
     () => Number(product.discountPrice || product.price || 0),
     [product.discountPrice, product.price]
   );
+  const reviewCount = useMemo(() => {
+    if (Array.isArray(product.reviews)) {
+      return product.reviews.length;
+    }
+    return Number(product.reviewCount || 0);
+  }, [product.reviewCount, product.reviews]);
 
   const productImage = product.images?.[0] || product.image;
   const detailsPrefetch = usePrefetchOnHover("productDetails", { immediate: true });
@@ -72,16 +80,16 @@ function ProductCard({ product }) {
         <div className="flex items-center gap-1 text-amber-500">
           <Star size={14} fill="currentColor" />
           <span className="text-sm font-semibold text-ink">{product.rating}</span>
-          <span className="text-xs text-muted">(128)</span>
+          <span className="text-xs text-muted">({reviewCount})</span>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-brand-dark">Rs. {price}</span>
+          <span className="text-lg font-bold text-brand-dark">{formatMoney(price)}</span>
           {product.discountPrice && (
-            <span className="text-sm text-muted line-through">Rs. {product.price}</span>
+            <span className="text-sm text-muted line-through">{formatMoney(product.price)}</span>
           )}
           {!product.discountPrice && product.oldPrice && (
-            <span className="text-sm text-muted line-through">Rs. {product.oldPrice}</span>
+            <span className="text-sm text-muted line-through">{formatMoney(product.oldPrice)}</span>
           )}
         </div>
 

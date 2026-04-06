@@ -1,21 +1,28 @@
-import { mockBanners } from "../data/mockAdminData";
+import { del, get, post, put } from "./adminApi";
 
-let banners = [...mockBanners];
-
-export const getBanners = async () => [...banners];
+export const getBanners = async () => {
+  const response = await get("/admin/banners");
+  return response?.data || [];
+};
 
 export const createBanner = async (payload) => {
-  const next = { ...payload, id: `b-${Date.now()}` };
-  banners = [next, ...banners];
-  return next;
+  const response = await post("/admin/banners", payload);
+  return response?.data || null;
 };
 
 export const updateBanner = async (id, payload) => {
-  banners = banners.map((item) => (item.id === id ? { ...item, ...payload } : item));
-  return banners.find((item) => item.id === id);
+  const response = await put(`/admin/banners/${id}`, payload);
+  return response?.data || null;
 };
 
 export const deleteBanner = async (id) => {
-  banners = banners.filter((item) => item.id !== id);
-  return { message: "Banner deleted" };
+  const response = await del(`/admin/banners/${id}`);
+  return response?.data || { message: "Banner deleted" };
+};
+
+export const uploadBannerImage = async (file) => {
+  const formData = new FormData();
+  formData.append("image", file);
+  const response = await post("/admin/banners/upload-image", formData);
+  return response?.data || null;
 };

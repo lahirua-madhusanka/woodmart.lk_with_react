@@ -1,8 +1,8 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAdminAuth } from "../context/AdminAuthContext";
 
 function AdminRoute({ children }) {
-  const { loading, isAuthenticated, user } = useAuth();
+  const { loading, isAuthenticated, user } = useAdminAuth();
   const location = useLocation();
 
   if (loading) {

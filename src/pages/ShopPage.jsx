@@ -10,7 +10,7 @@ function ShopPage() {
   const [search, setSearch] = useState(params.get("q") || "");
   const [category, setCategory] = useState("All");
   const [minRating, setMinRating] = useState(0);
-  const [maxPrice, setMaxPrice] = useState(1200);
+  const [maxPrice, setMaxPrice] = useState(200000);
   const [sortBy, setSortBy] = useState("featured");
   const [visibleCount, setVisibleCount] = useState(6);
 
@@ -101,12 +101,12 @@ function ShopPage() {
           </div>
 
           <div>
-            <h3 className="mb-2 text-sm font-semibold">Price up to Rs. {maxPrice}</h3>
+            <h3 className="mb-2 text-sm font-semibold">Price up to Rs. {Number(maxPrice).toLocaleString()}</h3>
             <input
               type="range"
-              min={30}
-              max={1200}
-              step={10}
+              min={0}
+              max={200000}
+              step={500}
               value={maxPrice}
               onChange={(event) => setMaxPrice(Number(event.target.value))}
               className="w-full accent-brand"

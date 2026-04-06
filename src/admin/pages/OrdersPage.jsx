@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "react-toastify";
 import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FilterDropdown from "../components/FilterDropdown";
@@ -6,7 +7,28 @@ import Loader from "../components/Loader";
 import OrderDetailsModal from "../components/OrderDetailsModal";
 import SearchBar from "../components/SearchBar";
 import StatusBadge from "../components/StatusBadge";
-import { getOrders, updateOrderStatus } from "../services/ordersService";
+import { getApiErrorMessage } from "../../services/apiClient";
+import { getOrderById, getOrders, updateOrderDetails } from "../services/ordersService";
+
+const ORDER_STATUS_OPTIONS = [
+  { value: "all", label: "All statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "processing", label: "Processing" },
+  { value: "packed", label: "Packed" },
+  { value: "shipped", label: "Shipped" },
+  { value: "out_for_delivery", label: "Out for delivery" },
+  { value: "delivered", label: "Delivered" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "returned", label: "Returned" },
+];
+
+const PAYMENT_STATUS_OPTIONS = [
+  { value: "all", label: "All payments" },
+  { value: "pending", label: "Pending" },
+  { value: "paid", label: "Paid" },
+  { value: "failed", label: "Failed" },
+];
 
 function OrdersPage() {
   const [orders, setOrders] = useState([]);
@@ -14,21 +36,31 @@ function OrdersPage() {
   const [paymentStatus, setPaymentStatus] = useState("all");
   const [orderStatus, setOrderStatus] = useState("all");
   const [query, setQuery] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [loadingSelectedOrder, setLoadingSelectedOrder] = useState(false);
 
   const loadOrders = async () => {
     setLoading(true);
-    const data = await getOrders({
-      paymentStatus: paymentStatus === "all" ? undefined : paymentStatus,
-      orderStatus: orderStatus === "all" ? undefined : orderStatus,
-    });
-    setOrders(data || []);
-    setLoading(false);
+    try {
+      const data = await getOrders({
+        paymentStatus: paymentStatus === "all" ? undefined : paymentStatus,
+        orderStatus: orderStatus === "all" ? undefined : orderStatus,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
+      });
+      setOrders(data || []);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     loadOrders();
-  }, [paymentStatus, orderStatus]);
+  }, [paymentStatus, orderStatus, fromDate, toDate]);
 
   const filtered = useMemo(() => {
     const lowered = query.toLowerCase().trim();
@@ -47,8 +79,34 @@ function OrdersPage() {
   }, [orders, query]);
 
   const handleStatusChange = async (id, value) => {
-    const updated = await updateOrderStatus(id, { orderStatus: value });
-    setOrders((prev) => prev.map((order) => (order._id === id ? updated : order)));
+    try {
+      const updated = await updateOrderDetails(id, { orderStatus: value, statusNote: `Status changed to ${value}` });
+      setOrders((prev) => prev.map((order) => (order._id === id ? updated : order)));
+      if (selectedOrder?._id === id) {
+        setSelectedOrder(updated);
+      }
+      toast.success("Order status updated");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    }
+  };
+
+  const openOrderDetails = async (orderId) => {
+    setLoadingSelectedOrder(true);
+    try {
+      const details = await getOrderById(orderId);
+      setSelectedOrder(details);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setLoadingSelectedOrder(false);
+    }
+  };
+
+  const handleOrderUpdated = (updatedOrder) => {
+    if (!updatedOrder) return;
+    setSelectedOrder(updatedOrder);
+    setOrders((prev) => prev.map((item) => (item._id === updatedOrder._id ? updatedOrder : item)));
   };
 
   if (loading) {
@@ -63,25 +121,25 @@ function OrdersPage() {
           value={paymentStatus}
           onChange={setPaymentStatus}
           label="Payment"
-          options={[
-            { value: "all", label: "All payments" },
-            { value: "pending", label: "Pending" },
-            { value: "paid", label: "Paid" },
-            { value: "failed", label: "Failed" },
-          ]}
+          options={PAYMENT_STATUS_OPTIONS}
         />
         <FilterDropdown
           value={orderStatus}
           onChange={setOrderStatus}
           label="Order"
-          options={[
-            { value: "all", label: "All statuses" },
-            { value: "created", label: "Created" },
-            { value: "processing", label: "Processing" },
-            { value: "shipped", label: "Shipped" },
-            { value: "delivered", label: "Delivered" },
-            { value: "cancelled", label: "Cancelled" },
-          ]}
+          options={ORDER_STATUS_OPTIONS}
+        />
+        <input
+          type="date"
+          value={fromDate}
+          onChange={(event) => setFromDate(event.target.value)}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+        <input
+          type="date"
+          value={toDate}
+          onChange={(event) => setToDate(event.target.value)}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
       </div>
 
@@ -100,9 +158,19 @@ function OrdersPage() {
             render: (row) => row.user?.name || row.userId?.name || row.customerName || "Guest",
           },
           {
+            key: "createdAt",
+            title: "Date",
+            render: (row) => new Date(row.createdAt).toLocaleDateString(),
+          },
+          {
             key: "total",
             title: "Total",
             render: (row) => `Rs. ${Number(row.totalPrice || row.totalAmount || 0).toFixed(2)}`,
+          },
+          {
+            key: "paymentMethod",
+            title: "Payment Method",
+            render: (row) => row.paymentMethod || "N/A",
           },
           {
             key: "payment",
@@ -112,7 +180,12 @@ function OrdersPage() {
           {
             key: "status",
             title: "Status",
-            render: (row) => <StatusBadge value={row.orderStatus || "created"} />,
+            render: (row) => <StatusBadge value={row.orderStatus || "pending"} />,
+          },
+          {
+            key: "tracking",
+            title: "Tracking",
+            render: (row) => row.trackingNumber || "-",
           },
           {
             key: "actions",
@@ -121,21 +194,25 @@ function OrdersPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedOrder(row)}
+                  onClick={() => openOrderDetails(row._id)}
                   className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold"
                 >
                   View
                 </button>
                 <select
-                  value={row.orderStatus || "created"}
+                  value={row.orderStatus || "pending"}
                   onChange={(event) => handleStatusChange(row._id, event.target.value)}
                   className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
                 >
-                  <option value="created">Created</option>
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
                   <option value="processing">Processing</option>
+                  <option value="packed">Packed</option>
                   <option value="shipped">Shipped</option>
+                  <option value="out_for_delivery">Out for delivery</option>
                   <option value="delivered">Delivered</option>
                   <option value="cancelled">Cancelled</option>
+                  <option value="returned">Returned</option>
                 </select>
               </div>
             ),
@@ -147,6 +224,8 @@ function OrdersPage() {
       <OrderDetailsModal
         open={Boolean(selectedOrder)}
         order={selectedOrder}
+        loading={loadingSelectedOrder}
+        onOrderUpdated={handleOrderUpdated}
         onClose={() => setSelectedOrder(null)}
       />
     </div>

@@ -1,5 +1,7 @@
 import { ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "react-toastify";
+import PasswordConfirmModal from "../../components/admin/PasswordConfirmModal";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
@@ -19,6 +21,10 @@ function CustomersPage() {
   const [query, setQuery] = useState("");
   const [deleteId, setDeleteId] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [roleTarget, setRoleTarget] = useState(null);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [roleLoading, setRoleLoading] = useState(false);
+  const [roleError, setRoleError] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -45,8 +51,39 @@ function CustomersPage() {
 
   const handleRoleToggle = async (customer) => {
     const nextRole = customer.role === "admin" ? "user" : "admin";
-    const updated = await updateCustomerRole(customer._id, nextRole);
-    setCustomers((prev) => prev.map((item) => (item._id === customer._id ? updated : item)));
+    setRoleTarget({
+      id: customer._id,
+      name: customer.name,
+      email: customer.email,
+      currentRole: customer.role,
+      nextRole,
+    });
+    setAdminPassword("");
+    setRoleError("");
+  };
+
+  const confirmRoleChange = async () => {
+    if (!roleTarget) return;
+    if (!adminPassword.trim()) {
+      setRoleError("Password is required");
+      return;
+    }
+
+    setRoleLoading(true);
+    try {
+      const updated = await updateCustomerRole(roleTarget.id, roleTarget.nextRole, adminPassword);
+      setCustomers((prev) => prev.map((item) => (item._id === roleTarget.id ? updated : item)));
+      toast.success("Role updated successfully");
+      setRoleTarget(null);
+      setAdminPassword("");
+      setRoleError("");
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      setRoleError(message);
+      toast.error(message);
+    } finally {
+      setRoleLoading(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -138,6 +175,24 @@ function CustomersPage() {
           Next
         </button>
       </div>
+
+      <PasswordConfirmModal
+        open={Boolean(roleTarget)}
+        title="Confirm Role Change"
+        description="For security, please enter your admin password to confirm this role update."
+        password={adminPassword}
+        error={roleError}
+        loading={roleLoading}
+        confirmText="Confirm"
+        onPasswordChange={setAdminPassword}
+        onConfirm={confirmRoleChange}
+        onClose={() => {
+          if (roleLoading) return;
+          setRoleTarget(null);
+          setAdminPassword("");
+          setRoleError("");
+        }}
+      />
 
       <ConfirmDeleteModal
         open={Boolean(deleteId)}

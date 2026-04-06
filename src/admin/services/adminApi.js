@@ -1,4 +1,4 @@
-import apiClient from "../../services/apiClient";
+import adminApiClient from "./adminApiClient";
 
 export async function safeRequest(request, fallback) {
   try {
@@ -13,20 +13,24 @@ export async function safeRequest(request, fallback) {
 }
 
 export function get(path, options = {}) {
-  return apiClient.get(path, options);
+  return adminApiClient.get(path, options);
 }
 
 export function post(path, payload) {
-  return apiClient.post(path, payload);
+  return adminApiClient.post(path, payload);
 }
 
 export function put(path, payload) {
-  return apiClient.put(path, payload);
+  return adminApiClient.put(path, payload);
+}
+
+export function patch(path, payload) {
+  return adminApiClient.patch(path, payload);
 }
 
 export function del(path, payload) {
   if (payload) {
-    return apiClient.delete(path, { data: payload });
+    return adminApiClient.delete(path, { data: payload });
   }
-  return apiClient.delete(path);
+  return adminApiClient.delete(path);
 }

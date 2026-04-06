@@ -38,8 +38,11 @@ function PromoBanner() {
             <h3 className="font-display text-3xl font-semibold text-brand-dark">
               Build your calm productive corner
             </h3>
-            <Link to="/shop" className="inline-flex rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark">
-              View Collection
+            <Link
+              to="/custom-project"
+              className="inline-flex rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
+            >
+              Build your dream
             </Link>
           </div>
         </article>

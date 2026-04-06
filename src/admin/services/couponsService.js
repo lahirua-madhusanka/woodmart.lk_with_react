@@ -1,21 +1,21 @@
-import { mockCoupons } from "../data/mockAdminData";
+import { del, get, post, put } from "./adminApi";
 
-let coupons = [...mockCoupons];
-
-export const getCoupons = async () => [...coupons];
+export const getCoupons = async () => {
+  const response = await get("/admin/coupons");
+  return response?.data || [];
+};
 
 export const createCoupon = async (payload) => {
-  const next = { ...payload, id: `coupon-${Date.now()}` };
-  coupons = [next, ...coupons];
-  return next;
+  const response = await post("/admin/coupons", payload);
+  return response?.data || null;
 };
 
 export const updateCoupon = async (id, payload) => {
-  coupons = coupons.map((item) => (item.id === id ? { ...item, ...payload } : item));
-  return coupons.find((item) => item.id === id);
+  const response = await put(`/admin/coupons/${id}`, payload);
+  return response?.data || null;
 };
 
 export const deleteCoupon = async (id) => {
-  coupons = coupons.filter((item) => item.id !== id);
-  return { message: "Coupon deleted" };
+  const response = await del(`/admin/coupons/${id}`);
+  return response?.data || { message: "Coupon deleted" };
 };

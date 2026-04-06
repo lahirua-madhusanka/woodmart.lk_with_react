@@ -10,7 +10,7 @@ function LazySection({
   const { ref, isNearScreen } = useNearScreen({ rootMargin, triggerOnce: true });
 
   return (
-    <div ref={ref} className={className} style={{ minHeight }}>
+    <div ref={ref} className={className} style={isNearScreen ? undefined : { minHeight }}>
       {isNearScreen ? children : fallback}
     </div>
   );

@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import AnnouncementBar from "./AnnouncementBar";
 import Footer from "./Footer";
 import Navbar from "./Navbar";
+import UserChatWidget from "../chat/UserChatWidget";
 
 function MainLayout() {
   return (
@@ -12,6 +13,7 @@ function MainLayout() {
         <Outlet />
       </main>
       <Footer />
+      <UserChatWidget />
     </div>
   );
 }

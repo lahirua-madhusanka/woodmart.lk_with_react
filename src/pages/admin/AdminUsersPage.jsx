@@ -1,6 +1,7 @@
 import { Search, ShieldCheck, Trash2 } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { toast } from "react-toastify";
+import PasswordConfirmModal from "../../components/admin/PasswordConfirmModal";
 import StatusBadge from "../../components/admin/StatusBadge";
 import { getApiErrorMessage } from "../../services/apiClient";
 import {
@@ -17,6 +18,10 @@ function AdminUsersPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [deleteUserId, setDeleteUserId] = useState("");
+  const [roleTarget, setRoleTarget] = useState(null);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [roleLoading, setRoleLoading] = useState(false);
+  const [roleError, setRoleError] = useState("");
 
   const loadUsers = async (searchTerm = "") => {
     setLoading(true);
@@ -39,13 +44,34 @@ function AdminUsersPage() {
     loadUsers(query);
   };
 
-  const changeRole = async (id, role) => {
+  const openRoleModal = (user) => {
+    const nextRole = user.role === "admin" ? "user" : "admin";
+    setRoleTarget({ id: user._id, name: user.name, email: user.email, currentRole: user.role, nextRole });
+    setAdminPassword("");
+    setRoleError("");
+  };
+
+  const confirmRoleChange = async () => {
+    if (!roleTarget) return;
+    if (!adminPassword.trim()) {
+      setRoleError("Password is required");
+      return;
+    }
+
+    setRoleLoading(true);
     try {
-      const updated = await updateAdminUserRoleApi(id, role);
-      setUsers((prev) => prev.map((user) => (user._id === id ? updated : user)));
-      toast.success("User role updated");
+      const updated = await updateAdminUserRoleApi(roleTarget.id, roleTarget.nextRole, adminPassword);
+      setUsers((prev) => prev.map((user) => (user._id === roleTarget.id ? updated : user)));
+      toast.success("Role updated successfully");
+      setRoleTarget(null);
+      setAdminPassword("");
+      setRoleError("");
     } catch (error) {
-      toast.error(getApiErrorMessage(error));
+      const message = getApiErrorMessage(error);
+      setRoleError(message);
+      toast.error(message);
+    } finally {
+      setRoleLoading(false);
     }
   };
 
@@ -110,7 +136,7 @@ function AdminUsersPage() {
               render: (row) => (
                 <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => changeRole(row._id, row.role === "admin" ? "user" : "admin")}
+                    onClick={() => openRoleModal(row)}
                     className="inline-flex items-center gap-1 rounded-md border border-brand px-2 py-1 text-xs font-semibold text-brand"
                   >
                     <ShieldCheck size={13} />
@@ -132,6 +158,23 @@ function AdminUsersPage() {
       )}
 
       <Suspense fallback={null}>
+        <PasswordConfirmModal
+          open={Boolean(roleTarget)}
+          title="Confirm Role Change"
+          description="For security, please enter your admin password to confirm this role update."
+          password={adminPassword}
+          error={roleError}
+          loading={roleLoading}
+          confirmText="Confirm"
+          onPasswordChange={setAdminPassword}
+          onConfirm={confirmRoleChange}
+          onClose={() => {
+            if (roleLoading) return;
+            setRoleTarget(null);
+            setAdminPassword("");
+            setRoleError("");
+          }}
+        />
         <ConfirmModal
           open={Boolean(deleteUserId)}
           title="Delete user"

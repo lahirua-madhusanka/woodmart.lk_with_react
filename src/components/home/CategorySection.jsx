@@ -28,17 +28,23 @@ function CategorySection({ categories }) {
             className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
           >
             <div className="overflow-hidden">
-              <img
-                src={category.image}
-                alt={category.name}
-                loading="lazy"
-                decoding="async"
-                className="h-44 w-full object-cover transition duration-500 group-hover:scale-105"
-              />
+              {category.image ? (
+                <img
+                  src={category.image}
+                  alt={category.name}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-44 w-full object-cover transition duration-500 group-hover:scale-105"
+                />
+              ) : (
+                <div className="h-44 w-full bg-slate-100" />
+              )}
             </div>
             <div className="p-4">
               <h3 className="text-lg font-semibold">{category.name}</h3>
-              <p className="text-sm text-muted">{category.items} curated products</p>
+              <p className="text-sm text-muted">
+                {category.count || 0} {(category.count || 0) === 1 ? "product" : "products"}
+              </p>
             </div>
           </motion.article>
         ))}

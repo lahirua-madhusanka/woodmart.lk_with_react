@@ -1,15 +1,22 @@
 import { useEffect, useState } from "react";
+import { toast } from "react-toastify";
 import Loader from "../components/Loader";
-import { getSettings, saveSettings } from "../services/settingsService";
+import { getSettings, saveSettings, uploadHeroImage } from "../services/settingsService";
+import { getApiErrorMessage } from "../../services/apiClient";
 
 function SettingsPage() {
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingHeroImage, setUploadingHeroImage] = useState(false);
 
   useEffect(() => {
     const load = async () => {
-      const data = await getSettings();
-      setSettings(data);
+      try {
+        const data = await getSettings();
+        setSettings(data);
+      } catch (error) {
+        toast.error(getApiErrorMessage(error));
+      }
     };
 
     load();
@@ -22,10 +29,33 @@ function SettingsPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setSaving(true);
-    const updated = await saveSettings(settings);
-    setSettings(updated);
-    setSaving(false);
+    try {
+      setSaving(true);
+      const updated = await saveSettings(settings);
+      setSettings(updated);
+      toast.success("Settings saved successfully");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleHeroImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingHeroImage(true);
+      const response = await uploadHeroImage(file);
+      setSettings(response.settings);
+      toast.success(response.message);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setUploadingHeroImage(false);
+      event.target.value = "";
+    }
   };
 
   if (!settings) {
@@ -43,10 +73,10 @@ function SettingsPage() {
         />
       </label>
       <label className="text-sm text-muted">
-        Admin Email
+        Support Email
         <input
-          value={settings.adminEmail || ""}
-          onChange={setField("adminEmail")}
+          value={settings.supportEmail || ""}
+          onChange={setField("supportEmail")}
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
       </label>
@@ -67,11 +97,35 @@ function SettingsPage() {
         />
       </label>
       <label className="text-sm text-muted">
-        Delivery Fee
+        Store Address
         <input
-          type="number"
-          value={settings.deliveryFee || 0}
-          onChange={setField("deliveryFee")}
+          value={settings.storeAddress || ""}
+          onChange={setField("storeAddress")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="text-sm text-muted">
+        Business Hours
+        <input
+          value={settings.businessHours || ""}
+          onChange={setField("businessHours")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="text-sm text-muted md:col-span-2">
+        Support Note
+        <textarea
+          rows={2}
+          value={settings.supportNote || ""}
+          onChange={setField("supportNote")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="text-sm text-muted md:col-span-2">
+        Contact Section Image URL
+        <input
+          value={settings.contactImageUrl || ""}
+          onChange={setField("contactImageUrl")}
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
       </label>
@@ -85,15 +139,6 @@ function SettingsPage() {
         />
       </label>
       <label className="text-sm text-muted">
-        Tax Rate (%)
-        <input
-          type="number"
-          value={settings.taxRate || 0}
-          onChange={setField("taxRate")}
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="text-sm text-muted">
         Theme Accent
         <input
           value={settings.themeAccent || "#0959a4"}
@@ -101,6 +146,95 @@ function SettingsPage() {
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
       </label>
+
+      <div className="md:col-span-2 mt-2 border-t border-slate-200 pt-4">
+        <h3 className="text-base font-semibold text-ink">Homepage Hero Section</h3>
+        <p className="mt-1 text-xs text-muted">Edit the main homepage banner content to match your current campaign.</p>
+      </div>
+
+      <label className="text-sm text-muted md:col-span-2">
+        Hero Title
+        <input
+          value={settings.heroTitle || ""}
+          onChange={setField("heroTitle")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+
+      <label className="text-sm text-muted md:col-span-2">
+        Hero Subtitle
+        <textarea
+          rows={3}
+          value={settings.heroSubtitle || ""}
+          onChange={setField("heroSubtitle")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+
+      <label className="text-sm text-muted">
+        Primary Button Text
+        <input
+          value={settings.heroPrimaryButtonText || ""}
+          onChange={setField("heroPrimaryButtonText")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+
+      <label className="text-sm text-muted">
+        Primary Button Link
+        <input
+          value={settings.heroPrimaryButtonLink || "/shop"}
+          onChange={setField("heroPrimaryButtonLink")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+
+      <label className="text-sm text-muted">
+        Secondary Button Text
+        <input
+          value={settings.heroSecondaryButtonText || ""}
+          onChange={setField("heroSecondaryButtonText")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+
+      <label className="text-sm text-muted">
+        Secondary Button Link
+        <input
+          value={settings.heroSecondaryButtonLink || "/shop"}
+          onChange={setField("heroSecondaryButtonLink")}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+
+      <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <p className="text-sm font-semibold text-ink">Upload Hero Image</p>
+        <p className="mt-1 text-xs text-muted">Choose an image file and we will store it and save it automatically.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleHeroImageUpload}
+            disabled={uploadingHeroImage}
+            className="text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-brand file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
+          />
+          {uploadingHeroImage ? <span className="text-xs text-muted">Uploading image...</span> : null}
+        </div>
+      </div>
+
+      {settings.heroImage ? (
+        <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Hero Image Preview</p>
+          <img
+            src={settings.heroImage}
+            alt="Hero preview"
+            className="h-44 w-full rounded-lg object-cover"
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+            }}
+          />
+        </div>
+      ) : null}
 
       <div className="md:col-span-2">
         <button

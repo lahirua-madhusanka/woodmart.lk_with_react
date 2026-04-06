@@ -24,6 +24,10 @@ function DashboardPage() {
 
   const totals = stats?.totals || {};
   const revenueChart = useMemo(() => stats?.monthlyRevenue || [], [stats]);
+  const maxRevenue = useMemo(
+    () => Math.max(...revenueChart.map((entry) => Number(entry.revenue || 0)), 1),
+    [revenueChart]
+  );
 
   if (loading) {
     return <Loader label="Loading dashboard..." />;
@@ -49,10 +53,11 @@ function DashboardPage() {
           ) : (
             <div className="flex h-56 items-end gap-2">
               {revenueChart.map((item) => {
-                const max = Math.max(...revenueChart.map((entry) => entry.revenue || 0), 1);
-                const height = Math.max(12, Math.round(((item.revenue || 0) / max) * 100));
+                const amount = Number(item.revenue || 0);
+                const height = Math.max(12, Math.round((amount / maxRevenue) * 100));
                 return (
-                  <div key={item.month} className="flex flex-1 flex-col items-center gap-2">
+                  <div key={item.month} className="flex h-full flex-1 flex-col justify-end items-center gap-2">
+                    <span className="text-[10px] font-semibold text-muted">Rs. {amount.toLocaleString()}</span>
                     <div className="w-full rounded-t-md bg-brand/80" style={{ height: `${height}%` }} />
                     <span className="text-xs text-muted">{item.month}</span>
                   </div>

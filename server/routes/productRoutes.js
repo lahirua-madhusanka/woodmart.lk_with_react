@@ -6,7 +6,9 @@ import {
   createProduct,
   deleteProduct,
   getProductById,
+  getReviewEligibility,
   getProducts,
+  updateOwnReview,
   uploadProductImages,
   updateProduct,
 } from "../controllers/productController.js";
@@ -52,6 +54,14 @@ router.post(
       .optional({ nullable: true })
       .isFloat({ min: 0 })
       .withMessage("Discount price must be positive"),
+    body("productCost")
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage("Product cost must be a non-negative value"),
+    body("shippingPrice")
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage("Shipping price must be a non-negative value"),
     body("sku").optional({ nullable: true }).isString(),
     body("brand").optional().isString(),
     body("featured").optional().isBoolean(),
@@ -67,15 +77,30 @@ router.post(
 router.put("/:id", protect, adminOnly, updateProduct);
 router.delete("/:id", protect, adminOnly, deleteProduct);
 
+router.get("/:id/reviews/eligibility", protect, getReviewEligibility);
+
 router.post(
   "/:id/reviews",
   protect,
   [
     body("rating").isInt({ min: 1, max: 5 }).withMessage("Rating must be between 1 and 5"),
+    body("title").optional({ nullable: true }).trim().isLength({ max: 120 }).withMessage("Title is too long"),
     body("comment").trim().notEmpty().withMessage("Comment is required"),
   ],
   validateRequest,
   addReview
+);
+
+router.put(
+  "/:id/reviews/me",
+  protect,
+  [
+    body("rating").isInt({ min: 1, max: 5 }).withMessage("Rating must be between 1 and 5"),
+    body("title").optional({ nullable: true }).trim().isLength({ max: 120 }).withMessage("Title is too long"),
+    body("comment").trim().notEmpty().withMessage("Comment is required"),
+  ],
+  validateRequest,
+  updateOwnReview
 );
 
 export default router;

@@ -8,6 +8,8 @@ const defaultForm = {
   category: "",
   price: "",
   discountPrice: "",
+  productCost: "",
+  shippingPrice: "",
   stock: "",
   sku: "",
   brand: "",
@@ -41,6 +43,8 @@ function ProductForm({
       ...initialValues,
       price: initialValues?.price ?? "",
       discountPrice: initialValues?.discountPrice ?? "",
+      productCost: initialValues?.productCost ?? "",
+      shippingPrice: initialValues?.shippingPrice ?? "",
       stock: initialValues?.stock ?? initialValues?.countInStock ?? "",
       sku: initialValues?.sku ?? "",
       brand: initialValues?.brand ?? "",
@@ -139,6 +143,16 @@ function ProductForm({
       return;
     }
 
+    if (formState.productCost === "" || Number(formState.productCost) < 0) {
+      setImageError("Product cost must be a non-negative value.");
+      return;
+    }
+
+    if (formState.shippingPrice === "" || Number(formState.shippingPrice) < 0) {
+      setImageError("Shipping price must be a non-negative value.");
+      return;
+    }
+
     if (existingImages.length + selectedFiles.length < 1) {
       setImageError("At least 1 product image is required.");
       return;
@@ -166,6 +180,8 @@ function ProductForm({
       price: Number(formState.price),
       discountPrice:
         formState.discountPrice === "" ? null : Number(formState.discountPrice),
+      productCost: Number(formState.productCost),
+      shippingPrice: Number(formState.shippingPrice),
       stock: Number(formState.stock),
       sku: formState.sku.trim() || null,
       brand: formState.brand.trim(),
@@ -244,6 +260,34 @@ function ProductForm({
             step="0.01"
             value={formState.discountPrice}
             onChange={handleInputChange}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+        </label>
+
+        <label className="text-sm text-muted">
+          Product Cost
+          <input
+            name="productCost"
+            type="number"
+            min="0"
+            step="0.01"
+            value={formState.productCost}
+            onChange={handleInputChange}
+            required
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+        </label>
+
+        <label className="text-sm text-muted">
+          Shipping Price
+          <input
+            name="shippingPrice"
+            type="number"
+            min="0"
+            step="0.01"
+            value={formState.shippingPrice}
+            onChange={handleInputChange}
+            required
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
         </label>

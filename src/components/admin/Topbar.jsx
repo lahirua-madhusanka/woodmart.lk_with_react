@@ -1,8 +1,8 @@
 import { LogOut, Menu } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { useAdminAuth } from "../../context/AdminAuthContext";
 
 function Topbar({ onToggleSidebar, title = "Admin Dashboard" }) {
-  const { logout, user } = useAuth();
+  const { logout, user } = useAdminAuth();
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:px-6">

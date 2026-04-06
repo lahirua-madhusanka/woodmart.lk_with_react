@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 function AdminSettingsPage() {
   const [settings, setSettings] = useState({
     storeName: "Woodmart.lk",
-    supportEmail: "support@atelieroak.com",
+    supportEmail: "support@woodmart.lk",
     lowStockThreshold: 10,
     allowGuestCheckout: false,
   });

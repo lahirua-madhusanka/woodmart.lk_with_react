@@ -1,12 +1,26 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
+import { useStorefrontSettings } from "../context/StorefrontSettingsContext";
 import { getApiErrorMessage } from "../services/apiClient";
 import { getUserOrdersApi } from "../services/orderService";
 
+const COURIER_TRACKING_URL = "https://www.prontolanka.lk/";
+
 function OrdersPage() {
+  const { formatMoney } = useStorefrontSettings();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const handleCopyTracking = async (trackingNumber) => {
+    if (!trackingNumber) return;
+    try {
+      await navigator.clipboard.writeText(trackingNumber);
+      toast.success("Tracking number copied");
+    } catch (error) {
+      toast.error("Unable to copy tracking number");
+    }
+  };
 
   useEffect(() => {
     const loadOrders = async () => {
@@ -48,13 +62,36 @@ function OrdersPage() {
                 </div>
               </div>
               <div className="mt-3 grid gap-2 text-sm text-muted sm:grid-cols-3">
-                <p>Total: Rs. {order.totalAmount.toFixed(2)}</p>
+                <p>Total: {formatMoney(order.totalAmount)}</p>
                 <p>Payment: {order.paymentStatus}</p>
                 <p>Items: {order.items.length}</p>
               </div>
-              <Link to={`/order-confirmation/${order._id}`} className="mt-4 inline-flex text-sm font-semibold text-brand">
-                View details
-              </Link>
+              <div className="mt-3 text-sm text-muted">
+                Tracking: {order.trackingNumber || "Not assigned yet"}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link to={`/order-confirmation/${order._id}`} className="inline-flex text-sm font-semibold text-brand">
+                  View details
+                </Link>
+                {order.trackingNumber ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyTracking(order.trackingNumber)}
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-ink"
+                    >
+                      Copy Tracking
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => window.open(COURIER_TRACKING_URL, "_blank", "noopener,noreferrer")}
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-ink"
+                    >
+                      Track Order
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </article>
           ))}
         </div>

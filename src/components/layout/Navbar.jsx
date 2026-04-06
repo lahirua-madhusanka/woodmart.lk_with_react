@@ -11,6 +11,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import RoutePrefetchLink from "../common/RoutePrefetchLink";
 import { usePrefetchOnHover, usePrefetchTrigger } from "../../hooks/usePrefetchOnHover";
 import { useAuth } from "../../context/AuthContext";
+import { useStorefrontSettings } from "../../context/StorefrontSettingsContext";
 import { useStore } from "../../context/StoreContext";
 
 const menuLinks = [
@@ -26,6 +27,7 @@ function Navbar() {
   const [searchText, setSearchText] = useState("");
   const navigate = useNavigate();
   const { isAuthenticated, logout, user } = useAuth();
+  const { settings } = useStorefrontSettings();
   const { cartCount, wishlist } = useStore();
   const cartPrefetch = usePrefetchOnHover("cart");
   const wishlistPrefetch = usePrefetchOnHover("wishlist");
@@ -37,7 +39,7 @@ function Navbar() {
   const handleSearch = (event) => {
     event.preventDefault();
     const query = searchText.trim();
-    navigate(query ? `/shop?q=${encodeURIComponent(query)}` : "/shop");
+    navigate(query ? `/search?q=${encodeURIComponent(query)}` : "/search");
     setMobileOpen(false);
   };
 
@@ -59,7 +61,7 @@ function Navbar() {
           </button>
 
           <NavLink to="/" className="shrink-0 font-display text-2xl font-bold text-brand">
-            Woodmart.lk
+            {settings.storeName}
           </NavLink>
 
           <nav className="hidden items-center gap-6 xl:gap-7 lg:flex">
@@ -94,6 +96,15 @@ function Navbar() {
               </label>
             </form>
 
+            {isAuthenticated ? (
+              <NavLink
+                to="/my-requests"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-ink transition hover:border-brand hover:text-brand"
+              >
+                My Requests
+              </NavLink>
+            ) : null}
+
             <RoutePrefetchLink
               routeKey="wishlist"
               to="/wishlist"
@@ -125,10 +136,10 @@ function Navbar() {
             </RoutePrefetchLink>
 
             <NavLink
-              to={isAuthenticated ? "/orders" : "/auth"}
+              to={isAuthenticated ? "/account" : "/auth"}
               className="rounded-full p-2 text-slate-700 transition hover:bg-slate-100 hover:text-brand"
               aria-label="Account"
-              title={isAuthenticated ? "Orders" : "Login"}
+              title={isAuthenticated ? "My Account" : "Login"}
               onMouseEnter={triggerAuthPrefetch}
               onFocus={triggerAuthPrefetch}
               {...(!isAuthenticated ? authPrefetch : {})}
@@ -189,11 +200,11 @@ function Navbar() {
               </RoutePrefetchLink>
 
               <NavLink
-                to={isAuthenticated ? "/orders" : "/auth"}
+                to={isAuthenticated ? "/account" : "/auth"}
                 onClick={() => setMobileOpen(false)}
                 className="rounded-full p-2 text-slate-700 transition hover:bg-slate-100 hover:text-brand"
                 aria-label="Account"
-                title={isAuthenticated ? "Orders" : "Login"}
+                title={isAuthenticated ? "My Account" : "Login"}
                 onMouseEnter={triggerAuthPrefetch}
                 onFocus={triggerAuthPrefetch}
                 {...(!isAuthenticated ? authPrefetch : {})}
@@ -220,8 +231,11 @@ function Navbar() {
               ))}
               {isAuthenticated ? (
                 <>
-                  <NavLink to="/orders" onClick={() => setMobileOpen(false)} className={navLinkClass}>
-                    My Orders
+                  <NavLink to="/my-requests" onClick={() => setMobileOpen(false)} className={navLinkClass}>
+                    My Requests
+                  </NavLink>
+                  <NavLink to="/account" onClick={() => setMobileOpen(false)} className={navLinkClass}>
+                    My Account
                   </NavLink>
                   {user?.role === "admin" ? (
                     <NavLink to="/admin" onClick={() => setMobileOpen(false)} className={navLinkClass}>

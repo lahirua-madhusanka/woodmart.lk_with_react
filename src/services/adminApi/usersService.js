@@ -5,8 +5,8 @@ export const getAdminUsersApi = async (params = {}) => {
   return data;
 };
 
-export const updateAdminUserRoleApi = async (id, role) => {
-  const { data } = await apiClient.put(`/admin/users/${id}/role`, { role });
+export const updateAdminUserRoleApi = async (id, newRole, adminPassword) => {
+  const { data } = await apiClient.patch(`/admin/users/${id}/role`, { newRole, adminPassword });
   return data;
 };
 

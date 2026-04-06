@@ -14,8 +14,119 @@ const calculateRating = (reviews = []) => {
   return Number((sum / reviews.length).toFixed(1));
 };
 
+const normalizeReview = (row) => ({
+  _id: row.id,
+  user: row.user_id,
+  name: row.name,
+  title: row.title || "",
+  rating: Number(row.rating || 0),
+  comment: row.comment,
+  orderId: row.order_id || null,
+  verifiedPurchase: Boolean(row.order_id),
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const ensureReviewProductExists = async (productId) => {
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select("id")
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (productError) {
+    throw new Error(productError.message);
+  }
+
+  if (!product) {
+    return null;
+  }
+
+  return product;
+};
+
+const getEligibleDeliveredOrder = async ({ userId, productId }) => {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id, created_at, order_items!inner(product_id)")
+    .eq("user_id", userId)
+    .eq("order_status", "delivered")
+    .eq("order_items.product_id", productId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data?.[0] || null;
+};
+
+const refreshProductRating = async (productId) => {
+  const { data: reviews, error: reviewsError } = await supabase
+    .from("product_reviews")
+    .select("rating")
+    .eq("product_id", productId);
+
+  if (reviewsError) {
+    throw new Error(reviewsError.message);
+  }
+
+  const nextRating = calculateRating(reviews || []);
+
+  const { error: ratingError } = await supabase
+    .from("products")
+    .update({ rating: nextRating })
+    .eq("id", productId);
+
+  if (ratingError) {
+    throw new Error(ratingError.message);
+  }
+};
+
 const productSelect =
-  "id, name, description, price, discount_price, category, stock, rating, created_at, updated_at, product_images(image_url, sort_order), product_reviews(id, user_id, name, rating, comment, created_at, updated_at)";
+  "id, name, description, price, discount_price, product_cost, shipping_price, category, stock, rating, created_at, updated_at, product_images(image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at)";
+
+export const getReviewEligibility = asyncHandler(async (req, res) => {
+  const product = await ensureReviewProductExists(req.params.id);
+  if (!product) {
+    res.status(404);
+    throw new Error("Product not found");
+  }
+
+  const [deliveredOrder, existingReview] = await Promise.all([
+    getEligibleDeliveredOrder({ userId: req.user._id, productId: req.params.id }),
+    supabase
+      .from("product_reviews")
+      .select("id, user_id, name, title, rating, comment, order_id, created_at, updated_at")
+      .eq("product_id", req.params.id)
+      .eq("user_id", req.user._id)
+      .maybeSingle(),
+  ]);
+
+  if (existingReview.error) {
+    res.status(500);
+    throw new Error(existingReview.error.message);
+  }
+
+  const hasDeliveredPurchase = Boolean(deliveredOrder);
+  const hasExistingReview = Boolean(existingReview.data);
+
+  let message = "Only verified buyers can review this product";
+  if (!hasDeliveredPurchase) {
+    message = "You can only review products you have purchased and received.";
+  } else if (hasExistingReview) {
+    message = "You already reviewed this product. You can edit your review.";
+  }
+
+  res.json({
+    eligible: hasDeliveredPurchase,
+    canReview: hasDeliveredPurchase && !hasExistingReview,
+    canEdit: hasDeliveredPurchase && hasExistingReview,
+    message,
+    existingReview: existingReview.data ? normalizeReview(existingReview.data) : null,
+  });
+});
 
 export const getProducts = asyncHandler(async (req, res) => {
   const { category, q, sort } = req.query;
@@ -75,6 +186,8 @@ export const createProduct = asyncHandler(async (req, res) => {
     price,
     discountPrice,
     category,
+    productCost = 0,
+    shippingPrice = 0,
     images = [],
     stock = 0,
     rating = 0,
@@ -105,6 +218,8 @@ export const createProduct = asyncHandler(async (req, res) => {
     price,
     discount_price: discountPrice ?? null,
     category,
+    product_cost: Number(productCost || 0),
+    shipping_price: Number(shippingPrice || 0),
     stock,
     rating,
     sku: sku || null,
@@ -128,6 +243,8 @@ export const createProduct = asyncHandler(async (req, res) => {
         price,
         discount_price: discountPrice ?? null,
         category,
+        product_cost: Number(productCost || 0),
+        shipping_price: Number(shippingPrice || 0),
         stock,
         rating,
       })
@@ -191,6 +308,8 @@ export const updateProduct = asyncHandler(async (req, res) => {
   if (req.body.price !== undefined) payload.price = req.body.price;
   if (req.body.discountPrice !== undefined) payload.discount_price = req.body.discountPrice;
   if (req.body.category !== undefined) payload.category = req.body.category;
+  if (req.body.productCost !== undefined) payload.product_cost = Number(req.body.productCost || 0);
+  if (req.body.shippingPrice !== undefined) payload.shipping_price = Number(req.body.shippingPrice || 0);
   if (req.body.stock !== undefined) payload.stock = req.body.stock;
   if (req.body.rating !== undefined) payload.rating = req.body.rating;
   if (req.body.sku !== undefined) payload.sku = req.body.sku || null;
@@ -219,6 +338,8 @@ export const updateProduct = asyncHandler(async (req, res) => {
     delete fallbackPayload.brand;
     delete fallbackPayload.featured;
     delete fallbackPayload.status;
+    delete fallbackPayload.product_cost;
+    delete fallbackPayload.shipping_price;
 
     ({ error: updateError } = await supabase
       .from("products")
@@ -307,21 +428,21 @@ export const deleteProduct = asyncHandler(async (req, res) => {
 });
 
 export const addReview = asyncHandler(async (req, res) => {
-  const { rating, comment } = req.body;
-  const { data: product, error: productError } = await supabase
-    .from("products")
-    .select("id")
-    .eq("id", req.params.id)
-    .maybeSingle();
-
-  if (productError) {
-    res.status(500);
-    throw new Error(productError.message);
-  }
-
+  const { rating, comment, title } = req.body;
+  const product = await ensureReviewProductExists(req.params.id);
   if (!product) {
     res.status(404);
     throw new Error("Product not found");
+  }
+
+  const deliveredOrder = await getEligibleDeliveredOrder({
+    userId: req.user._id,
+    productId: req.params.id,
+  });
+
+  if (!deliveredOrder) {
+    res.status(403);
+    throw new Error("You can only review products you have purchased and received.");
   }
 
   const { data: existingReview, error: existingError } = await supabase
@@ -337,46 +458,97 @@ export const addReview = asyncHandler(async (req, res) => {
   }
 
   if (existingReview) {
-    res.status(400);
-    throw new Error("Product already reviewed by this user");
+    res.status(409);
+    throw new Error("You already reviewed this product. Please edit your existing review.");
   }
 
-  const { error: insertError } = await supabase.from("product_reviews").insert({
-    product_id: req.params.id,
-    user_id: req.user._id,
-    name: req.user.name,
-    rating: Number(rating),
-    comment,
-  });
+  const { data: insertedReview, error: insertError } = await supabase
+    .from("product_reviews")
+    .insert({
+      product_id: req.params.id,
+      user_id: req.user._id,
+      order_id: deliveredOrder.id,
+      name: req.user.name,
+      title: String(title || "").trim(),
+      rating: Number(rating),
+      comment,
+    })
+    .select("id, user_id, name, title, rating, comment, order_id, created_at, updated_at")
+    .single();
 
   if (insertError) {
     res.status(500);
     throw new Error(insertError.message);
   }
 
-  const { data: reviews, error: reviewsError } = await supabase
+  await refreshProductRating(req.params.id);
+
+  res.status(201).json({
+    message: "Review added",
+    review: normalizeReview(insertedReview),
+  });
+});
+
+export const updateOwnReview = asyncHandler(async (req, res) => {
+  const { rating, comment, title } = req.body;
+
+  const product = await ensureReviewProductExists(req.params.id);
+  if (!product) {
+    res.status(404);
+    throw new Error("Product not found");
+  }
+
+  const deliveredOrder = await getEligibleDeliveredOrder({
+    userId: req.user._id,
+    productId: req.params.id,
+  });
+
+  if (!deliveredOrder) {
+    res.status(403);
+    throw new Error("You can only review products you have purchased and received.");
+  }
+
+  const { data: existingReview, error: existingError } = await supabase
     .from("product_reviews")
-    .select("rating")
-    .eq("product_id", req.params.id);
+    .select("id")
+    .eq("product_id", req.params.id)
+    .eq("user_id", req.user._id)
+    .maybeSingle();
 
-  if (reviewsError) {
+  if (existingError) {
     res.status(500);
-    throw new Error(reviewsError.message);
+    throw new Error(existingError.message);
   }
 
-  const nextRating = calculateRating(reviews || []);
-
-  const { error: ratingError } = await supabase
-    .from("products")
-    .update({ rating: nextRating })
-    .eq("id", req.params.id);
-
-  if (ratingError) {
-    res.status(500);
-    throw new Error(ratingError.message);
+  if (!existingReview) {
+    res.status(404);
+    throw new Error("Review not found for this product");
   }
 
-  res.status(201).json({ message: "Review added" });
+  const { data: updatedReview, error: updateError } = await supabase
+    .from("product_reviews")
+    .update({
+      rating: Number(rating),
+      comment,
+      title: String(title || "").trim(),
+      order_id: deliveredOrder.id,
+      name: req.user.name,
+    })
+    .eq("id", existingReview.id)
+    .select("id, user_id, name, title, rating, comment, order_id, created_at, updated_at")
+    .single();
+
+  if (updateError) {
+    res.status(500);
+    throw new Error(updateError.message);
+  }
+
+  await refreshProductRating(req.params.id);
+
+  res.json({
+    message: "Review updated",
+    review: normalizeReview(updatedReview),
+  });
 });
 
 export const uploadProductImages = asyncHandler(async (req, res) => {
