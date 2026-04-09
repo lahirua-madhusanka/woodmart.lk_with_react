@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   changePasswordApi,
@@ -12,14 +13,28 @@ import {
 } from "../services/authService";
 import { getApiErrorMessage } from "../services/apiClient";
 import { USER_SESSION_KEY } from "../constants/sessionKeys";
+import { IDLE_TIMEOUT_MS, IDLE_WARNING_MS } from "../constants/sessionTimeouts";
+import useAutoLogout from "../hooks/useAutoLogout";
 
 const UserAuthContext = createContext(null);
 
 export function UserAuthProvider({ children }) {
+  const navigate = useNavigate();
   const [token, setToken] = useState(() => localStorage.getItem(USER_SESSION_KEY) || "");
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authCheckFailed, setAuthCheckFailed] = useState(false);
+
+  const clearUserStorage = useCallback(() => {
+    localStorage.removeItem(USER_SESSION_KEY);
+    sessionStorage.removeItem(USER_SESSION_KEY);
+  }, []);
+
+  const clearUserSessionState = useCallback(() => {
+    clearUserStorage();
+    setToken("");
+    setUser(null);
+  }, [clearUserStorage]);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -36,9 +51,7 @@ export function UserAuthProvider({ children }) {
       } catch (error) {
         const status = error?.response?.status;
         if (status === 401 || status === 403) {
-          localStorage.removeItem(USER_SESSION_KEY);
-          setToken("");
-          setUser(null);
+          clearUserSessionState();
           setAuthCheckFailed(false);
         } else {
           setAuthCheckFailed(true);
@@ -105,11 +118,38 @@ export function UserAuthProvider({ children }) {
     } catch {
       // Ignore logout API failures during local cleanup.
     }
-    localStorage.removeItem(USER_SESSION_KEY);
-    setToken("");
-    setUser(null);
+    clearUserSessionState();
     toast.info("Logged out");
   };
+
+  const handleIdleWarning = useCallback(() => {
+    const warningSeconds = Math.max(Math.round(IDLE_WARNING_MS / 1000), 1);
+    const warningMinutes = Math.max(Math.ceil(warningSeconds / 60), 1);
+    toast.warning(`You will be logged out in ${warningMinutes} minute due to inactivity`, {
+      autoClose: 4000,
+    });
+  }, []);
+
+  const handleIdleLogout = useCallback(async () => {
+    try {
+      await logoutApi();
+    } catch {
+      // Ignore logout API failures during local cleanup.
+    }
+
+    clearUserSessionState();
+    toast.info("Session expired due to inactivity");
+    navigate("/auth", { replace: true });
+  }, [clearUserSessionState, navigate]);
+
+  useAutoLogout({
+    enabled: Boolean(token && user),
+    idleTimeoutMs: IDLE_TIMEOUT_MS,
+    warningBeforeMs: IDLE_WARNING_MS,
+    onIdleTimeout: handleIdleLogout,
+    onWarning: handleIdleWarning,
+    onBeforeUnload: clearUserStorage,
+  });
 
   const updateProfile = async (payload) => {
     try {
