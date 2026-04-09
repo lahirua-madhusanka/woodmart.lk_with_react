@@ -97,7 +97,7 @@ const normalizeSettings = (data = {}) => {
 };
 
 export const getSettings = async () => {
-  const data = await safeRequest(() => get("/admin/settings"), defaultSettings);
+  const data = await safeRequest(() => get("/admin/settings", { params: { _: Date.now() } }), defaultSettings);
   return normalizeSettings(data);
 };
 

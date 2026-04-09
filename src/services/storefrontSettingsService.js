@@ -91,7 +91,9 @@ const normalizeSettings = (data = {}) => {
 
 export const getStorefrontSettingsApi = async () => {
   try {
-    const { data } = await apiClient.get("/store/settings");
+    const { data } = await apiClient.get("/store/settings", {
+      params: { _: Date.now() },
+    });
     return normalizeSettings(data);
   } catch {
     return normalizeSettings(defaultStorefrontSettings);
