@@ -20,6 +20,8 @@ const MyCustomRequestsPage = lazy(() => import("../pages/MyCustomRequestsPage"))
 const AuthPage = lazy(() => import("../pages/AuthPage"));
 const ForgotPasswordPage = lazy(() => import("../pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("../pages/ResetPasswordPage"));
+const CheckEmailPage = lazy(() => import("../pages/CheckEmailPage"));
+const VerifyEmailPage = lazy(() => import("../pages/VerifyEmailPage"));
 const AccountPage = lazy(() => import("../pages/AccountPage"));
 const MyInquiriesPage = lazy(() => import("../pages/MyInquiriesPage"));
 const ShippingPolicyPage = lazy(() => import("../pages/ShippingPolicyPage"));
@@ -113,6 +115,9 @@ function UserApp() {
         <Route path="auth" element={withSuspense(<AuthPage />, "Loading account...")} />
         <Route path="auth/forgot-password" element={withSuspense(<ForgotPasswordPage />, "Loading password reset...")} />
         <Route path="reset-password" element={withSuspense(<ResetPasswordPage />, "Loading reset password...")} />
+        <Route path="auth/check-email" element={withSuspense(<CheckEmailPage />, "Loading verification details...")} />
+        <Route path="auth/verify-email" element={withSuspense(<VerifyEmailPage />, "Verifying email...")} />
+        <Route path="verify-email" element={withSuspense(<VerifyEmailPage />, "Verifying email...")} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

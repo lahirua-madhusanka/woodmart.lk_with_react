@@ -6,7 +6,9 @@ import {
   logoutApi,
   profileApi,
   registerApi,
+  resendVerificationApi,
   updateProfileApi,
+  verifyEmailApi,
 } from "../services/authService";
 import { getApiErrorMessage } from "../services/apiClient";
 import { USER_SESSION_KEY } from "../constants/sessionKeys";
@@ -64,11 +66,15 @@ export function UserAuthProvider({ children }) {
         localStorage.setItem(USER_SESSION_KEY, response.token);
         setToken(response.token);
       }
-      if (response.user) {
+      if (response.token && response.user) {
         setUser(response.user);
       }
 
-      toast.success(response.message || "Registration successful");
+      if (response.requiresVerification) {
+        toast.success(response.message || "Registration successful. Please verify your email.");
+      } else {
+        toast.success(response.message || "Registration successful");
+      }
 
       return response;
     } catch (error) {
@@ -128,6 +134,28 @@ export function UserAuthProvider({ children }) {
     }
   };
 
+  const verifyEmail = async (payload) => {
+    try {
+      const response = await verifyEmailApi(payload);
+      toast.success(response.message || "Email verified successfully");
+      return response;
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+      throw error;
+    }
+  };
+
+  const resendVerification = async (payload) => {
+    try {
+      const response = await resendVerificationApi(payload);
+      toast.info(response.message || "Verification email sent");
+      return response;
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+      throw error;
+    }
+  };
+
   const value = useMemo(
     () => ({
       user,
@@ -141,6 +169,8 @@ export function UserAuthProvider({ children }) {
       refreshProfile,
       updateProfile,
       changePassword,
+      verifyEmail,
+      resendVerification,
     }),
     [user, token, loading, authCheckFailed]
   );

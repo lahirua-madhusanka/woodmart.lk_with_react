@@ -6,7 +6,7 @@ import { getApiErrorMessage } from "../services/apiClient";
 import { evaluatePasswordStrength } from "../utils/passwordStrength";
 
 function AuthPage() {
-  const { isAuthenticated, loading, login, register } = useAuth();
+  const { isAuthenticated, loading, login, register, resendVerification } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mode, setMode] = useState("login");
@@ -17,6 +17,8 @@ function AuthPage() {
     confirmPassword: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [resending, setResending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [inlineError, setInlineError] = useState("");
@@ -67,20 +69,37 @@ function AuthPage() {
     setSubmitting(true);
     try {
       if (mode === "register") {
-        await register({ name: form.name, email: form.email, password: form.password });
-        setMode("login");
-        setForm((prev) => ({ ...prev, password: "", confirmPassword: "" }));
-        return;
+        const response = await register({ name: form.name, email: form.email, password: form.password });
+        if (response?.requiresVerification) {
+          const nextEmail = response.email || form.email;
+          setVerificationEmail(nextEmail);
+          navigate(`/auth/check-email?email=${encodeURIComponent(nextEmail)}`, { replace: true });
+          return;
+        }
       } else {
         await login({ email: form.email, password: form.password });
       }
       navigate(redirectTarget, { replace: true });
     } catch (error) {
+      const message = getApiErrorMessage(error).toLowerCase();
+      if (mode === "login" && message.includes("verify your email")) {
+        setVerificationEmail(form.email);
+      }
       if (mode === "register") {
         setInlineError(getApiErrorMessage(error));
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const onResendVerification = async () => {
+    if (!verificationEmail || resending) return;
+    setResending(true);
+    try {
+      await resendVerification({ email: verificationEmail });
+    } finally {
+      setResending(false);
     }
   };
 
@@ -251,6 +270,22 @@ function AuthPage() {
               <p className="text-sm text-muted">
                 Forgot your password? <Link to="/auth/forgot-password" className="font-semibold text-brand">Reset here</Link>
               </p>
+            )}
+
+            {mode === "login" && verificationEmail && (
+              <div className="rounded-lg border border-brand/30 bg-brand/5 p-3 text-sm text-slate-700">
+                <p>
+                  Need a verification email for <strong>{verificationEmail}</strong>?
+                </p>
+                <button
+                  type="button"
+                  onClick={onResendVerification}
+                  disabled={resending}
+                  className="mt-2 font-semibold text-brand disabled:opacity-60"
+                >
+                  {resending ? "Sending..." : "Resend verification email"}
+                </button>
+              </div>
             )}
 
           </form>

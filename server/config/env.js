@@ -33,6 +33,9 @@ const env = {
   smtpFrom: clean(process.env.SMTP_FROM),
   emailDebugLog: String(process.env.EMAIL_DEBUG_LOG || "false").toLowerCase() === "true",
   brevoApiKey: process.env.BREVO_API_KEY || "",
+  brevoSenderEmail: clean(process.env.BREVO_SENDER_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER),
+  brevoSenderName: clean(process.env.BREVO_SENDER_NAME || "Woodmart.lk"),
+  emailVerificationTtlHours: Number(process.env.EMAIL_VERIFICATION_TTL_HOURS || 1),
   brevoNewsletterListId: Number(process.env.BREVO_NEWSLETTER_LIST_ID || 0),
 };
 

@@ -8,9 +8,11 @@ import {
   logoutUser,
   registerUser,
   registerAdmin,
+  resendVerificationEmail,
   resetPasswordWithToken,
   updateProfile,
   validateResetPasswordToken,
+  verifyEmail,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { validateRequest } from "../middleware/validateMiddleware.js";
@@ -47,6 +49,15 @@ router.post(
   ],
   validateRequest,
   registerAdmin
+);
+
+router.get("/verify-email", verifyEmail);
+router.post("/verify-email", verifyEmail);
+router.post(
+  "/resend-verification",
+  [body("email").isEmail().withMessage("Valid email is required")],
+  validateRequest,
+  resendVerificationEmail
 );
 
 router.post(

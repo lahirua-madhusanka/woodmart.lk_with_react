@@ -30,6 +30,19 @@ export const logoutApi = async () => {
   return data;
 };
 
+export const verifyEmailApi = async (params) => {
+  const { token } = params;
+  const { data } = await apiClient.get("/auth/verify-email", {
+    params: { token },
+  });
+  return data;
+};
+
+export const resendVerificationApi = async (payload) => {
+  const { data } = await apiClient.post("/auth/resend-verification", payload);
+  return data;
+};
+
 export const forgotPasswordApi = async (payload) => {
   const { data } = await apiClient.post("/auth/forgot-password", payload);
   return data;
