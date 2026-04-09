@@ -22,7 +22,6 @@ import newsletterRoutes from "./routes/newsletterRoutes.js";
 import seedRoutes from "./routes/seedRoutes.js";
 import storefrontRoutes from "./routes/storefrontRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
-import { verifyEmailTransport } from "./utils/email.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -120,36 +119,4 @@ io.on("connection", (socket) => {
 server.listen(env.port, () => {
   // eslint-disable-next-line no-console
   console.log(`API server running on port ${env.port}`);
-
-  verifyEmailTransport()
-    .then((status) => {
-      const smtpDebug = {
-        host: env.smtpHost || null,
-        port: env.smtpPort || null,
-        userSet: Boolean(env.smtpUser),
-        passSet: Boolean(env.smtpPass),
-        fromSet: Boolean(env.smtpFrom),
-      };
-
-      if (status.ok) {
-        // eslint-disable-next-line no-console
-        console.log("[EMAIL_DEBUG] SMTP verification successful", smtpDebug);
-        return;
-      }
-
-      // eslint-disable-next-line no-console
-      console.error("[EMAIL_DEBUG] SMTP verification failed", {
-        ...smtpDebug,
-        reason: status.reason,
-        code: status.code || null,
-        response: status.response || null,
-        message: status.message || null,
-      });
-    })
-    .catch((error) => {
-      // eslint-disable-next-line no-console
-      console.error("[EMAIL_DEBUG] SMTP startup check crashed", {
-        message: error?.message || "Unknown error",
-      });
-    });
 });

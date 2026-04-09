@@ -37,6 +37,27 @@ const throwMissingSmtpError = (purpose) => {
   throw error;
 };
 
+const isSmtpThrottleError = (error) => {
+  const code = String(error?.code || "").toUpperCase();
+  const responseCode = Number(error?.responseCode || 0);
+  const statusCode = Number(error?.statusCode || 0);
+  const message = String(error?.message || "").toLowerCase();
+  const response = String(error?.response || "").toLowerCase();
+
+  if (code === "ETIMEDOUT" || code === "ECONNECTION") return false;
+
+  return (
+    responseCode === 429 ||
+    statusCode === 429 ||
+    code === "ETHROTTLE" ||
+    code === "ERATELIMIT" ||
+    message.includes("rate limit") ||
+    message.includes("too many") ||
+    response.includes("rate limit") ||
+    response.includes("too many")
+  );
+};
+
 export const sendPasswordResetEmail = async ({ toEmail, name, resetUrl }) => {
   const mailer = getTransporter();
 
