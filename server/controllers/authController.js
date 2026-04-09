@@ -5,15 +5,10 @@ import crypto from "node:crypto";
 import env from "../config/env.js";
 import supabase from "../config/supabase.js";
 import { mapProduct, mapUser } from "../utils/dbMappers.js";
-import { sendPasswordResetEmail, sendVerificationEmail } from "../utils/email.js";
+import { sendPasswordResetEmail } from "../utils/email.js";
 
 const signToken = (id) => jwt.sign({ id }, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
-const EMAIL_VERIFICATION_TTL_HOURS = 1;
 const PASSWORD_RESET_TTL_HOURS = 1;
-const RESEND_COOLDOWN_MS = 60 * 1000;
-const resendGuard = new Map();
-const recentVerifiedTokens = new Map();
-const RECENT_VERIFIED_TOKEN_TTL_MS = 10 * 60 * 1000;
 
 const getDefaultNameFromEmail = (email) => {
   const [namePart] = String(email || "").split("@");
@@ -36,131 +31,8 @@ const getClientBaseUrl = (req) => {
   return normalizeBaseUrl(env.clientUrl);
 };
 
-const getApiBaseUrl = (req) => {
-  const configured = normalizeBaseUrl(env.apiPublicUrl);
-  if (configured) {
-    return configured;
-  }
-
-  const forwardedProto = String(req?.headers?.["x-forwarded-proto"] || "").split(",")[0].trim();
-  const protocol = forwardedProto || req?.protocol || "https";
-  const host = String(req?.headers?.host || "").trim();
-
-  if (!host) {
-    return "";
-  }
-
-  return `${protocol}://${host}`.replace(/\/+$/, "");
-};
-
-const createVerificationToken = () => {
-  const token = crypto.randomBytes(32).toString("hex");
-  const tokenHash = hashVerificationToken(token);
-  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_HOURS * 60 * 60 * 1000).toISOString();
-  return {
-    token,
-    tokenHash,
-    expiresAt,
-  };
-};
-
-const buildVerificationUrl = (req, token) => {
-  const apiBase = getApiBaseUrl(req);
-  if (!apiBase) {
-    return `${getClientBaseUrl(req)}/verify-email?token=${encodeURIComponent(token)}`;
-  }
-  return `${apiBase}/api/auth/verify-email/redirect?token=${encodeURIComponent(token)}`;
-};
-
 const buildPasswordResetUrl = (req, token) =>
   `${getClientBaseUrl(req)}/reset-password?token=${encodeURIComponent(token)}`;
-
-const verifyEmailTokenAndActivate = async (token) => {
-  const tokenHash = hashVerificationToken(token);
-
-  for (const [cachedTokenHash, verifiedAt] of recentVerifiedTokens.entries()) {
-    if (Date.now() - verifiedAt > RECENT_VERIFIED_TOKEN_TTL_MS) {
-      recentVerifiedTokens.delete(cachedTokenHash);
-    }
-  }
-
-  if (recentVerifiedTokens.has(tokenHash)) {
-    return {
-      status: "already_verified",
-      message: "Email already verified. Please log in.",
-    };
-  }
-
-  const { data: tokenRow, error } = await supabase
-    .from("verification_tokens")
-    .select("id, user_id, expires_at")
-    .eq("token", tokenHash)
-    .maybeSingle();
-
-  if (error) {
-    const wrapped = new Error(error.message);
-    wrapped.statusCode = 500;
-    throw wrapped;
-  }
-
-  if (!tokenRow) {
-    const wrapped = new Error("Invalid verification link");
-    wrapped.statusCode = 400;
-    throw wrapped;
-  }
-
-  const expiresAt = tokenRow.expires_at ? new Date(tokenRow.expires_at) : null;
-  if (!expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
-    await supabase.from("verification_tokens").delete().eq("id", tokenRow.id);
-    const wrapped = new Error("Verification link has expired. Please request a new one.");
-    wrapped.statusCode = 400;
-    throw wrapped;
-  }
-
-  const { data: user, error: userError } = await supabase
-    .from("users")
-    .select("id, email_verified")
-    .eq("id", tokenRow.user_id)
-    .maybeSingle();
-
-  if (userError) {
-    const wrapped = new Error(userError.message);
-    wrapped.statusCode = 500;
-    throw wrapped;
-  }
-
-  if (!user) {
-    await supabase.from("verification_tokens").delete().eq("id", tokenRow.id);
-    const wrapped = new Error("Invalid verification link");
-    wrapped.statusCode = 400;
-    throw wrapped;
-  }
-
-  if (!user.email_verified) {
-    const { error: updateError } = await supabase.from("users").update({
-      email_verified: true,
-      email_verified_at: new Date().toISOString(),
-      email_verification_token_hash: null,
-      email_verification_expires_at: null,
-    }).eq("id", user.id);
-
-    if (updateError) {
-      const wrapped = new Error(updateError.message);
-      wrapped.statusCode = 500;
-      throw wrapped;
-    }
-  }
-
-  await supabase.from("verification_tokens").delete().eq("id", tokenRow.id);
-  recentVerifiedTokens.set(tokenHash, Date.now());
-
-  return {
-    status: user.email_verified ? "already_verified" : "verified",
-    message: user.email_verified
-      ? "Email already verified. Please log in."
-      : "Email verified successfully",
-  };
-};
 
 const isStrongPassword = (password) => {
   const value = String(password || "");
@@ -190,47 +62,6 @@ const invalidOrExpiredResetError = (res) => {
     res.status(400);
   }
   throw new Error("Reset link is invalid or expired");
-};
-
-const persistVerificationToken = async ({ userId, tokenHash, expiresAt }) => {
-  await supabase.from("verification_tokens").delete().eq("user_id", userId);
-
-  const { error } = await supabase.from("verification_tokens").insert({
-    user_id: userId,
-    token: tokenHash,
-    expires_at: expiresAt,
-  });
-
-  if (error) {
-    throw new Error(error.message || "Failed to persist verification token");
-  }
-};
-
-const sendVerificationToUser = async ({ req, userId, email, name, background = false }) => {
-  const { token, tokenHash, expiresAt } = createVerificationToken();
-  await persistVerificationToken({ userId, tokenHash, expiresAt });
-  const sendTask = sendVerificationEmail({
-    toEmail: email,
-    name,
-    verificationUrl: buildVerificationUrl(req, token),
-  }).catch((error) => {
-    // eslint-disable-next-line no-console
-    console.error("[EMAIL_DEBUG] verification queue failed", {
-      email,
-      userId,
-      message: error?.message || "Unknown error",
-      statusCode: error?.statusCode || null,
-    });
-    if (!background) {
-      throw error;
-    }
-  });
-
-  if (!background) {
-    await sendTask;
-  }
-
-  return { token };
 };
 
 const setAuthCookie = (res, token) => {
@@ -283,8 +114,8 @@ export const registerUser = asyncHandler(async (req, res) => {
       email: normalizedEmail,
       password_hash: passwordHash,
       role: "user",
-      email_verified: false,
-      email_verified_at: null,
+      email_verified: true,
+      email_verified_at: new Date().toISOString(),
     })
     .select("id, name, email, role, email_verified, email_verified_at, created_at, updated_at")
     .single();
@@ -294,32 +125,8 @@ export const registerUser = asyncHandler(async (req, res) => {
     throw new Error(createError?.message || "Failed to register user");
   }
 
-  let emailQueued = true;
-  try {
-    await sendVerificationToUser({
-      req,
-      userId: createdUser.id,
-      email: createdUser.email,
-      name: createdUser.name,
-      background: true,
-    });
-  } catch (error) {
-    emailQueued = false;
-    // eslint-disable-next-line no-console
-    console.error("[EMAIL_DEBUG] verification send failed", {
-      email: createdUser.email,
-      userId: createdUser.id,
-      message: error?.message || "Unknown error",
-      statusCode: error?.statusCode || null,
-    });
-  }
-
   res.status(201).json({
-    message: emailQueued
-      ? "Account created. Your verification email is being sent. Please check your inbox."
-      : "Account created, but verification email could not be sent. Please request a new verification email.",
-    requiresVerification: true,
-    emailQueued,
+    message: "Account created successfully. You can now log in.",
     email: normalizedEmail,
     user: mapUser(createdUser),
   });
@@ -360,11 +167,6 @@ export const loginUser = asyncHandler(async (req, res) => {
   if (!validPassword) {
     res.status(401);
     throw new Error("Invalid email or password");
-  }
-
-  if (!localUser.email_verified) {
-    res.status(403);
-    throw new Error("Please verify your email before logging in");
   }
 
   const token = signToken(localUser.id);
@@ -750,112 +552,3 @@ export const resetPasswordWithToken = asyncHandler(async (req, res) => {
   });
 });
 
-export const verifyEmail = asyncHandler(async (req, res) => {
-  const token = String(req.query.token || req.body?.token || "").trim();
-
-  if (!token) {
-    res.status(400);
-    throw new Error("Invalid verification link");
-  }
-
-  try {
-    const result = await verifyEmailTokenAndActivate(token);
-    return res.json({
-      success: true,
-      status: result.status,
-      message: result.message,
-    });
-  } catch (error) {
-    if (error?.statusCode) {
-      res.status(error.statusCode);
-    }
-    throw error;
-  }
-});
-
-export const verifyEmailRedirect = asyncHandler(async (req, res) => {
-  const token = String(req.query.token || "").trim();
-  const clientBase = getClientBaseUrl(req);
-  const redirectTo = (params) => {
-    const query = new URLSearchParams(params).toString();
-    return res.redirect(`${clientBase}/verify-email?${query}`);
-  };
-
-  if (!token) {
-    return redirectTo({
-      status: "error",
-      message: "Invalid verification link",
-    });
-  }
-
-  try {
-    const result = await verifyEmailTokenAndActivate(token);
-    return redirectTo({
-      status: result.status,
-      message: result.message,
-    });
-  } catch (error) {
-    return redirectTo({
-      status: "error",
-      message: error?.message || "Verification failed. Please request a new verification email.",
-      token,
-    });
-  }
-});
-
-export const resendVerificationEmail = asyncHandler(async (req, res) => {
-  const normalizedEmail = String(req.body.email || "").trim().toLowerCase();
-
-  if (!normalizedEmail) {
-    res.status(400);
-    throw new Error("Email is required");
-  }
-
-  const lastSentAt = resendGuard.get(normalizedEmail);
-  if (lastSentAt && Date.now() - lastSentAt < RESEND_COOLDOWN_MS) {
-    res.status(429);
-    throw new Error("Please wait before requesting another verification email");
-  }
-
-  const { data: user, error: userError } = await supabase
-    .from("users")
-    .select("id, name, email, email_verified")
-    .eq("email", normalizedEmail)
-    .maybeSingle();
-
-  if (userError) {
-    res.status(500);
-    throw new Error(userError.message);
-  }
-
-  if (!user) {
-    return res.json({ message: "If this email is registered, a verification link has been sent." });
-  }
-
-  if (user.email_verified) {
-    return res.json({ message: "Email is already verified" });
-  }
-
-  try {
-    await sendVerificationToUser({
-      req,
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      background: false,
-    });
-  } catch (error) {
-    if (error?.statusCode === 429) {
-      res.setHeader("Retry-After", String(error.retryAfter || 60));
-      res.status(429);
-      throw new Error(error.message || "Email provider is busy. Please try again shortly.");
-    }
-
-    res.status(500);
-    throw new Error(error?.message || "Unable to send verification email right now.");
-  }
-
-  resendGuard.set(normalizedEmail, Date.now());
-
-  res.json({ message: "Verification email sent. Please check your inbox." });
-});

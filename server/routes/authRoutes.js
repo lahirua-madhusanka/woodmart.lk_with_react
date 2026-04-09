@@ -9,11 +9,8 @@ import {
   registerUser,
   registerAdmin,
   resetPasswordWithToken,
-  resendVerificationEmail,
   updateProfile,
   validateResetPasswordToken,
-  verifyEmail,
-  verifyEmailRedirect,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { validateRequest } from "../middleware/validateMiddleware.js";
@@ -52,9 +49,6 @@ router.post(
   registerAdmin
 );
 
-router.get("/verify-email", verifyEmail);
-router.post("/verify-email", verifyEmail);
-router.get("/verify-email/redirect", verifyEmailRedirect);
 router.post(
   "/forgot-password",
   [body("email").isEmail().withMessage("Valid email is required")],
@@ -71,13 +65,6 @@ router.post(
   validateRequest,
   resetPasswordWithToken
 );
-router.post(
-  "/resend-verification",
-  [body("email").isEmail().withMessage("Valid email is required")],
-  validateRequest,
-  resendVerificationEmail
-);
-
 router.get("/profile", protect, getProfile);
 router.put(
   "/profile",
