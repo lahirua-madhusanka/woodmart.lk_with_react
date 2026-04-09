@@ -78,6 +78,20 @@ function HeroSection() {
   };
 
   const activeSlide = slides[activeIndex] || slides[0];
+  const activeSlideImageUrl = useMemo(() => {
+    const baseUrl = activeSlide?.imageUrl;
+    if (!baseUrl) return "";
+
+    const settingsVersion = Number(
+      settings?.settingsVersion || (settings?.updatedAt ? new Date(settings.updatedAt).getTime() : 0)
+    );
+
+    if (!Number.isFinite(settingsVersion) || settingsVersion <= 0) {
+      return baseUrl;
+    }
+
+    return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}v=${settingsVersion}`;
+  }, [activeSlide?.imageUrl, settings?.settingsVersion, settings?.updatedAt]);
 
   const onTouchStart = (event) => {
     touchStartXRef.current = event.changedTouches?.[0]?.clientX || 0;
@@ -115,7 +129,7 @@ function HeroSection() {
         <AnimatePresence mode="wait">
           <motion.img
             key={activeSlide.id}
-            src={activeSlide.imageUrl}
+            src={activeSlideImageUrl || activeSlide.imageUrl}
             alt={activeSlide.title || "Premium living room setup"}
             loading="eager"
             fetchPriority="high"

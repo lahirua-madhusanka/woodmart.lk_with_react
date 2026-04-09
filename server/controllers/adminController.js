@@ -1,5 +1,6 @@
 import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import supabase from "../config/supabase.js";
 import { addOrderStatusHistory, autoDeliverIfDue, buildOrderLifecycleTimestamps } from "../services/orderWorkflow.js";
 import { mapOrder, mapProduct, mapUser } from "../utils/dbMappers.js";
@@ -218,12 +219,20 @@ const mapStoreSettings = (row = {}) => {
     heroSecondaryButtonLink:
       row.hero_secondary_button_link ?? defaultStoreSettings.heroSecondaryButtonLink,
     heroImage: primarySlide.imageUrl,
+    updatedAt: row.updated_at ?? null,
+    settingsVersion: row.updated_at ? new Date(row.updated_at).getTime() : 0,
   };
 };
 
 const normalizeNumericSetting = (value, fallback) => {
   const normalized = Number(value);
   return Number.isFinite(normalized) ? normalized : fallback;
+};
+
+const applyNoStoreHeaders = (res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
 };
 
 const ensureStorefrontAssetsBucket = async () => {
@@ -340,6 +349,8 @@ const upsertStoreSettings = async (payload) => {
 };
 
 export const getAdminSettings = asyncHandler(async (req, res) => {
+  applyNoStoreHeaders(res);
+
   const { data, error } = await supabase
     .from("store_settings")
     .select(settingsSelect)
@@ -370,6 +381,8 @@ export const getAdminSettings = asyncHandler(async (req, res) => {
 });
 
 export const updateAdminSettings = asyncHandler(async (req, res) => {
+  applyNoStoreHeaders(res);
+
   const payload = buildStoreSettingsPayload(req.body);
 
   const { data, error } = await upsertStoreSettings(payload);
@@ -392,6 +405,8 @@ export const updateAdminSettings = asyncHandler(async (req, res) => {
 });
 
 export const uploadAdminHeroImage = asyncHandler(async (req, res) => {
+  applyNoStoreHeaders(res);
+
   if (!req.file) {
     res.status(400);
     throw new Error("Hero image file is required");
@@ -402,7 +417,7 @@ export const uploadAdminHeroImage = asyncHandler(async (req, res) => {
   const extension = req.file.originalname.includes(".")
     ? req.file.originalname.slice(req.file.originalname.lastIndexOf(".")).toLowerCase()
     : ".jpg";
-  const filePath = `hero/${Date.now()}-${Math.random().toString(36).slice(2)}${extension}`;
+  const filePath = `hero/${Date.now()}-${crypto.randomUUID()}${extension}`;
 
   const { error: uploadError } = await supabase.storage
     .from(STOREFRONT_ASSETS_BUCKET)

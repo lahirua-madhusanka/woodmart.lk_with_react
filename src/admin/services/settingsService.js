@@ -64,6 +64,9 @@ const normalizeSettings = (data = {}) => {
       data.freeShippingThreshold ?? defaultSettings.freeShippingThreshold
     ),
   };
+  const derivedSettingsVersion = Number(
+    merged.settingsVersion || (merged.updatedAt ? new Date(merged.updatedAt).getTime() : 0)
+  );
 
   const legacyFallbackSlides = [
     {
@@ -83,6 +86,7 @@ const normalizeSettings = (data = {}) => {
 
   return {
     ...merged,
+    settingsVersion: Number.isFinite(derivedSettingsVersion) ? derivedSettingsVersion : 0,
     heroSlides,
     heroImage: primarySlide?.imageUrl || merged.heroImage,
     heroTitle: primarySlide?.title || merged.heroTitle,

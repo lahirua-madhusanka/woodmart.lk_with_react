@@ -58,6 +58,9 @@ const normalizeHeroSlides = (slides, fallbackSlides) => {
 
 const normalizeSettings = (data = {}) => {
   const merged = { ...defaultStorefrontSettings, ...(data || {}) };
+  const derivedSettingsVersion = Number(
+    merged.settingsVersion || (merged.updatedAt ? new Date(merged.updatedAt).getTime() : 0)
+  );
   const fallbackSlides = [
     {
       id: "hero-slide-1",
@@ -76,6 +79,7 @@ const normalizeSettings = (data = {}) => {
 
   return {
     ...merged,
+    settingsVersion: Number.isFinite(derivedSettingsVersion) ? derivedSettingsVersion : 0,
     heroSlides,
     heroImage: primarySlide?.imageUrl || merged.heroImage,
     heroTitle: primarySlide?.title || merged.heroTitle,

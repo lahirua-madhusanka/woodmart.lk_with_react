@@ -81,6 +81,12 @@ const isMissingRelationError = (message = "") => {
   return normalized.includes("could not find") && (normalized.includes("relation") || normalized.includes("table"));
 };
 
+const applyNoStoreHeaders = (res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+};
+
 const mapStoreSettings = (row = {}) => {
   const legacySlide = {
     id: "hero-slide-1",
@@ -118,10 +124,14 @@ const mapStoreSettings = (row = {}) => {
     heroSecondaryButtonLink:
       row.hero_secondary_button_link ?? defaultStoreSettings.heroSecondaryButtonLink,
     heroImage: primarySlide.imageUrl,
+    updatedAt: row.updated_at ?? null,
+    settingsVersion: row.updated_at ? new Date(row.updated_at).getTime() : 0,
   };
 };
 
 export const getStorefrontSettings = asyncHandler(async (req, res) => {
+  applyNoStoreHeaders(res);
+
   const { data, error } = await supabase
     .from("store_settings")
     .select(settingsSelect)
