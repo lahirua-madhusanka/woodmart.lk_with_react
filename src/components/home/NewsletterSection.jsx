@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import {
-  subscribeNewsletterApi,
-  unsubscribeNewsletterApi,
-} from "../../services/newsletterService";
+import { subscribeNewsletterApi } from "../../services/newsletterService";
 import { getApiErrorMessage } from "../../services/apiClient";
 
 const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
@@ -71,45 +68,6 @@ function NewsletterSection() {
     }
   };
 
-  const handleUnsubscribe = async () => {
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!normalizedEmail) {
-      setState("error");
-      setMessage("Enter your email to unsubscribe");
-      return;
-    }
-
-    if (!isValidEmail(normalizedEmail)) {
-      setState("error");
-      setMessage("Please enter a valid email address");
-      return;
-    }
-
-    setState("loading");
-    setActiveAction("unsubscribe");
-    setMessage("");
-
-    try {
-      const response = await unsubscribeNewsletterApi({ email: normalizedEmail });
-
-      if (response?.status === "already_unsubscribed") {
-        setState("already");
-        setMessage("You are already unsubscribed");
-        return;
-      }
-
-      setState("success");
-      setMessage("Unsubscribed successfully");
-      setEmail("");
-    } catch (error) {
-      setState("error");
-      setMessage(getApiErrorMessage(error) || "Something went wrong");
-    } finally {
-      setActiveAction("");
-    }
-  };
-
   return (
     <section className="container-pad py-10">
       <div className="rounded-2xl bg-gradient-to-r from-brand-dark to-brand p-8 text-white lg:p-10">
@@ -150,14 +108,7 @@ function NewsletterSection() {
             >
               {state === "loading" && activeAction === "subscribe" ? "Subscribing..." : "Subscribe"}
             </button>
-            <button
-              type="button"
-              onClick={handleUnsubscribe}
-              className="rounded-lg border border-white/50 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-80"
-              disabled={state === "loading"}
-            >
-              {state === "loading" && activeAction === "unsubscribe" ? "Unsubscribing..." : "Unsubscribe"}
-            </button>
+           
           </form>
         </div>
 
