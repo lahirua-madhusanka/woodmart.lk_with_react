@@ -268,7 +268,16 @@ function AccountPage() {
       </section>
 
       <section>
-        <h3 className="mb-3 text-base font-semibold text-ink">Recent Orders</h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-base font-semibold text-ink">Recent Orders</h3>
+          <button
+            type="button"
+            onClick={() => navigate("/orders")}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-ink hover:border-brand hover:text-brand"
+          >
+            View All Orders
+          </button>
+        </div>
         <OrdersTable orders={orders.slice(0, 5)} loading={loadingOrders} onViewDetails={viewOrderDetails} />
       </section>
     </div>
@@ -276,7 +285,16 @@ function AccountPage() {
 
   const renderOrders = () => (
     <div className="space-y-3">
-      <h2 className="text-lg font-semibold text-ink">My Orders</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-ink">My Orders</h2>
+        <button
+          type="button"
+          onClick={() => navigate("/orders")}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-ink hover:border-brand hover:text-brand"
+        >
+          Go to Orders Page
+        </button>
+      </div>
       <OrdersTable orders={orders} loading={loadingOrders} onViewDetails={viewOrderDetails} />
     </div>
   );
