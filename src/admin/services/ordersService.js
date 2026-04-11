@@ -1,13 +1,13 @@
-import { get, put, safeRequest } from "./adminApi";
+import { get, put } from "./adminApi";
 
 export const getOrders = async (params = {}) =>
-  safeRequest(() => get("/admin/orders", { params }), []);
+  (await get("/admin/orders", { params })).data;
 
 export const getOrderById = async (id) =>
-  safeRequest(() => get(`/admin/orders/${id}`), null);
+  (await get(`/admin/orders/${id}`)).data;
 
 export const updateOrderStatus = async (id, payload) =>
-  safeRequest(() => put(`/admin/orders/${id}/status`, payload), null);
+  (await put(`/admin/orders/${id}/status`, payload)).data;
 
 export const updateOrderDetails = async (id, payload) =>
-  safeRequest(() => put(`/admin/orders/${id}/status`, payload), null);
+  (await put(`/admin/orders/${id}/status`, payload)).data;

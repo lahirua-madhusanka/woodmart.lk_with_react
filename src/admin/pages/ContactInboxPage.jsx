@@ -158,6 +158,7 @@ function ContactInboxPage() {
         setInquiries((prev) =>
           prev.map((item) => (item.id === selectedInquiry.id ? result.inquiry : item))
         );
+        await loadInquiries();
         toast.success("Status updated successfully");
       } catch (error) {
         toast.error(getApiErrorMessage(error));
@@ -188,6 +189,7 @@ function ContactInboxPage() {
       setInquiries((prev) =>
         prev.map((item) => (item.id === selectedInquiry.id ? result.inquiry : item))
       );
+      await loadInquiries();
       toast.success("Reply sent to customer successfully");
       setReplyMessage("");
       setReplyNote("");

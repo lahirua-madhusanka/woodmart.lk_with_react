@@ -88,10 +88,11 @@ function OrdersPage() {
     }
 
     try {
-      const updated = await updateOrderDetails(id, { orderStatus: value, statusNote: `Status changed to ${value}` });
-      setOrders((prev) => prev.map((order) => (order._id === id ? updated : order)));
+      await updateOrderDetails(id, { orderStatus: value, statusNote: `Status changed to ${value}` });
+      await loadOrders();
       if (selectedOrder?._id === id) {
-        setSelectedOrder(updated);
+        const refreshed = await getOrderById(id);
+        setSelectedOrder(refreshed);
       }
       toast.success("Order status updated");
     } catch (error) {
@@ -114,7 +115,7 @@ function OrdersPage() {
   const handleOrderUpdated = (updatedOrder) => {
     if (!updatedOrder) return;
     setSelectedOrder(updatedOrder);
-    setOrders((prev) => prev.map((item) => (item._id === updatedOrder._id ? updatedOrder : item)));
+    loadOrders();
   };
 
   if (loading) {

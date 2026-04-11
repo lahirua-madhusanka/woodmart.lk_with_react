@@ -26,14 +26,20 @@ function CustomersPage() {
   const [roleLoading, setRoleLoading] = useState(false);
   const [roleError, setRoleError] = useState("");
 
-  useEffect(() => {
-    const load = async () => {
+  const loadCustomers = async () => {
+    setLoading(true);
+    try {
       const data = await getCustomers();
-      setCustomers(data || []);
+      setCustomers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    load();
+  useEffect(() => {
+    loadCustomers();
   }, []);
 
   const filtered = useMemo(() => {
@@ -71,8 +77,8 @@ function CustomersPage() {
 
     setRoleLoading(true);
     try {
-      const updated = await updateCustomerRole(roleTarget.id, roleTarget.nextRole, adminPassword);
-      setCustomers((prev) => prev.map((item) => (item._id === roleTarget.id ? updated : item)));
+      await updateCustomerRole(roleTarget.id, roleTarget.nextRole, adminPassword);
+      await loadCustomers();
       toast.success("Role updated successfully");
       setRoleTarget(null);
       setAdminPassword("");
@@ -88,10 +94,16 @@ function CustomersPage() {
 
   const handleDelete = async () => {
     setDeleting(true);
-    await deleteCustomer(deleteId);
-    setCustomers((prev) => prev.filter((item) => item._id !== deleteId));
-    setDeleteId("");
-    setDeleting(false);
+    try {
+      await deleteCustomer(deleteId);
+      await loadCustomers();
+      setDeleteId("");
+      toast.success("Customer deleted");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) {

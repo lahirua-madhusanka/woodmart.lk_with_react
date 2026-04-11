@@ -1,7 +1,7 @@
-import { del, get, safeRequest } from "./adminApi";
+import { del, get } from "./adminApi";
 
 export const getReviews = async () =>
-  safeRequest(() => get("/admin/reviews"), []);
+  (await get("/admin/reviews")).data;
 
 export const deleteReview = async (id) =>
-  safeRequest(() => del(`/products/reviews/${id}`), { message: "Deleted" });
+  (await del(`/products/reviews/${id}`)).data;

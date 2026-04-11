@@ -139,7 +139,8 @@ function CustomRequestsPage() {
       const updated = response?.request;
 
       setSelectedRequest(updated || selectedRequest);
-      setRequests((prev) => prev.map((row) => (row.id === selectedRequest.id ? (updated || row) : row)));
+      await loadRequests();
+      await loadRequestDetail(selectedRequest.id);
       toast.success(response?.message || "Request updated");
     } catch (error) {
       toast.error(getApiErrorMessage(error));
@@ -164,7 +165,8 @@ function CustomRequestsPage() {
       });
       const updated = response?.request;
       setSelectedRequest(updated || selectedRequest);
-      setRequests((prev) => prev.map((row) => (row.id === selectedRequest.id ? (updated || row) : row)));
+      await loadRequests();
+      await loadRequestDetail(selectedRequest.id);
       toast.success(response?.message || "Purchase link sent");
     } catch (error) {
       toast.error(getApiErrorMessage(error));
@@ -183,10 +185,11 @@ function CustomRequestsPage() {
 
     setDeleting(true);
     try {
+      const deletedId = selectedRequest.id;
       await deleteAdminCustomRequestApi(selectedRequest.id);
-      setRequests((prev) => prev.filter((r) => r.id !== selectedRequest.id));
+      setSelectedId((current) => (current === deletedId ? "" : current));
+      await loadRequests();
       setSelectedRequest(null);
-      setSelectedId("");
       toast.success("Request deleted successfully");
     } catch (error) {
       toast.error(getApiErrorMessage(error));

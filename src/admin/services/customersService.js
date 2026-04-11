@@ -1,7 +1,7 @@
-import { del, get, patch, safeRequest } from "./adminApi";
+import { del, get, patch } from "./adminApi";
 
 export const getCustomers = async (params = {}) =>
-  safeRequest(() => get("/admin/users", { params }), []);
+  (await get("/admin/users", { params })).data;
 
 export const updateCustomerRole = async (id, newRole, adminPassword) => {
   const response = await patch(`/admin/users/${id}/role`, { newRole, adminPassword });
@@ -9,4 +9,4 @@ export const updateCustomerRole = async (id, newRole, adminPassword) => {
 };
 
 export const deleteCustomer = async (id) =>
-  safeRequest(() => del(`/admin/users/${id}`), { message: "Deleted" });
+  (await del(`/admin/users/${id}`)).data;

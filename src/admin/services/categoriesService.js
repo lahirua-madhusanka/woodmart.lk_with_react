@@ -1,7 +1,7 @@
-import { del, get, post, safeRequest } from "./adminApi";
+import { del, get, post } from "./adminApi";
 
 export const getCategories = async () =>
-  safeRequest(() => get("/admin/categories"), []);
+  (await get("/admin/categories")).data;
 
 export const createCategory = async (payload) =>
   (await post("/admin/categories", payload)).data;

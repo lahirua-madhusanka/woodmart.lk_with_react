@@ -12,14 +12,24 @@ function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
+  const loadDashboardStats = async () => {
+    setLoading(true);
+    try {
       const data = await getDashboardStats();
       setStats(data);
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    load();
+  useEffect(() => {
+    loadDashboardStats();
+
+    const intervalId = setInterval(() => {
+      loadDashboardStats();
+    }, 60000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   const totals = stats?.totals || {};
@@ -35,6 +45,16 @@ function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={loadDashboardStats}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700"
+        >
+          Refresh Stats
+        </button>
+      </div>
+
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard title="Total Products" value={totals.products || 0} icon={Package} />
         <SummaryCard title="Total Orders" value={totals.orders || 0} icon={ShoppingCart} />

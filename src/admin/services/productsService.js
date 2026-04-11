@@ -1,10 +1,10 @@
-import { del, get, post, put, safeRequest } from "./adminApi";
+import { del, get, post, put } from "./adminApi";
 
 export const getProducts = async (params = {}) =>
-  safeRequest(() => get("/products", { params }), []);
+  (await get("/products", { params })).data;
 
 export const getProductById = async (id) =>
-  safeRequest(() => get(`/products/${id}`), null);
+  (await get(`/products/${id}`)).data;
 
 export const createProduct = async (payload) =>
   (await post("/products", payload)).data;
@@ -20,7 +20,7 @@ export const uploadProductImages = async (files) => {
 };
 
 export const deleteProduct = async (id) =>
-  safeRequest(() => del(`/products/${id}`), { message: "Deleted" });
+  (await del(`/products/${id}`)).data;
 
 export const getCategories = async () =>
-  safeRequest(() => get("/admin/categories"), []);
+  (await get("/admin/categories")).data;

@@ -108,15 +108,14 @@ function BannersPage() {
       };
 
       if (editingId) {
-        const updated = await updateBanner(editingId, payload);
-        setBanners((prev) => prev.map((item) => (item.id === editingId ? updated : item)));
+        await updateBanner(editingId, payload);
         toast.success("Banner updated successfully");
       } else {
-        const created = await createBanner(payload);
-        setBanners((prev) => [created, ...prev]);
+        await createBanner(payload);
         toast.success("Banner created successfully");
       }
 
+      await loadBanners();
       resetForm();
     } catch (error) {
       toast.error(getApiErrorMessage(error));
@@ -127,7 +126,7 @@ function BannersPage() {
 
   const toggleStatus = async (banner) => {
     try {
-      const updated = await updateBanner(banner.id, {
+      await updateBanner(banner.id, {
         title: banner.title,
         subtitle: banner.subtitle,
         imageUrl: banner.imageUrl,
@@ -139,7 +138,7 @@ function BannersPage() {
         startDate: banner.startDate,
         endDate: banner.endDate,
       });
-      setBanners((prev) => prev.map((item) => (item.id === banner.id ? updated : item)));
+      await loadBanners();
       toast.success("Banner status updated");
     } catch (error) {
       toast.error(getApiErrorMessage(error));
@@ -167,7 +166,7 @@ function BannersPage() {
     setDeleting(true);
     try {
       await deleteBanner(deleteId);
-      setBanners((prev) => prev.filter((item) => item.id !== deleteId));
+      await loadBanners();
       setDeleteId("");
       toast.success("Banner deleted");
     } catch (error) {

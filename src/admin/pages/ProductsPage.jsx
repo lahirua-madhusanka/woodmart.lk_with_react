@@ -1,6 +1,7 @@
 import { Edit, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
@@ -8,6 +9,7 @@ import FilterDropdown from "../components/FilterDropdown";
 import Loader from "../components/Loader";
 import SearchBar from "../components/SearchBar";
 import StatusBadge from "../components/StatusBadge";
+import { getApiErrorMessage } from "../../services/apiClient";
 import usePagination from "../hooks/usePagination";
 import {
   deleteProduct,
@@ -25,16 +27,21 @@ function ProductsPage() {
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
+  const loadProducts = async () => {
+    setLoading(true);
+    try {
       const [productsData, categoriesData] = await Promise.all([getProducts(), getCategories()]);
-      setProducts(productsData || []);
-      setCategories((categoriesData || []).map((item) => item.name || item));
+      setProducts(Array.isArray(productsData) ? productsData : []);
+      setCategories((Array.isArray(categoriesData) ? categoriesData : []).map((item) => item.name || item));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    load();
+  useEffect(() => {
+    loadProducts();
   }, []);
 
   const filtered = useMemo(() => {
@@ -53,10 +60,16 @@ function ProductsPage() {
   const handleDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
-    await deleteProduct(deleteId);
-    setProducts((prev) => prev.filter((item) => item._id !== deleteId));
-    setDeleteId("");
-    setDeleting(false);
+    try {
+      await deleteProduct(deleteId);
+      await loadProducts();
+      setDeleteId("");
+      toast.success("Product deleted");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) {

@@ -121,15 +121,14 @@ function CouponsPage() {
       const payload = buildPayload(form);
 
       if (editingId) {
-        const updated = await updateCoupon(editingId, payload);
-        setCoupons((prev) => prev.map((entry) => (entry.id === editingId ? updated : entry)));
+        await updateCoupon(editingId, payload);
         toast.success("Coupon updated successfully");
       } else {
-        const created = await createCoupon(payload);
-        setCoupons((prev) => [created, ...prev]);
+        await createCoupon(payload);
         toast.success("Coupon created successfully");
       }
 
+      await loadCoupons();
       resetForm();
     } catch (error) {
       toast.error(getApiErrorMessage(error));
@@ -140,7 +139,7 @@ function CouponsPage() {
 
   const toggleStatus = async (coupon) => {
     try {
-      const updated = await updateCoupon(coupon.id, {
+      await updateCoupon(coupon.id, {
         code: coupon.code,
         title: coupon.title,
         discountType: coupon.discountType,
@@ -156,7 +155,7 @@ function CouponsPage() {
         totalUsageLimit: coupon.totalUsageLimit,
         perUserUsageLimit: coupon.perUserUsageLimit,
       });
-      setCoupons((prev) => prev.map((entry) => (entry.id === coupon.id ? updated : entry)));
+      await loadCoupons();
       toast.success("Coupon status updated");
     } catch (error) {
       toast.error(getApiErrorMessage(error));
@@ -167,7 +166,7 @@ function CouponsPage() {
     setDeleting(true);
     try {
       await deleteCoupon(deleteId);
-      setCoupons((prev) => prev.filter((entry) => entry.id !== deleteId));
+      await loadCoupons();
       setDeleteId("");
       toast.success("Coupon deleted");
     } catch (error) {

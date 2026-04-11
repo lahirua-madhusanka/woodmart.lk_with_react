@@ -1,9 +1,11 @@
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "react-toastify";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import Loader from "../components/Loader";
+import { getApiErrorMessage } from "../../services/apiClient";
 import { deleteReview, getReviews } from "../services/reviewsService";
 
 function ReviewsPage() {
@@ -12,22 +14,34 @@ function ReviewsPage() {
   const [deleteId, setDeleteId] = useState("");
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
+  const loadReviews = async () => {
+    setLoading(true);
+    try {
       const data = await getReviews();
-      setReviews(data || []);
+      setReviews(Array.isArray(data) ? data : []);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    load();
+  useEffect(() => {
+    loadReviews();
   }, []);
 
   const handleDelete = async () => {
     setDeleting(true);
-    await deleteReview(deleteId);
-    setReviews((prev) => prev.filter((item) => item._id !== deleteId));
-    setDeleteId("");
-    setDeleting(false);
+    try {
+      await deleteReview(deleteId);
+      await loadReviews();
+      setDeleteId("");
+      toast.success("Review deleted");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) {

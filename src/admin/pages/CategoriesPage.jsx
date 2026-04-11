@@ -13,19 +13,20 @@ function CategoriesPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState("");
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await getCategories();
-        setCategories(data || []);
-      } catch (error) {
-        toast.error(getApiErrorMessage(error));
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadCategories = async () => {
+    setLoading(true);
+    try {
+      const data = await getCategories();
+      setCategories(Array.isArray(data) ? data : []);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    load();
+  useEffect(() => {
+    loadCategories();
   }, []);
 
   const handleAddCategory = async (event) => {
@@ -35,12 +36,8 @@ function CategoriesPage() {
 
     try {
       setSaving(true);
-      const created = await createCategory({ name: trimmed });
-      setCategories((prev) => {
-        const exists = prev.some((item) => (item.name || item).toLowerCase() === trimmed.toLowerCase());
-        if (exists) return prev;
-        return [...prev, created].sort((a, b) => (a.name || a).localeCompare(b.name || b));
-      });
+      await createCategory({ name: trimmed });
+      await loadCategories();
       setNewCategory("");
       toast.success("Category added.");
     } catch (error) {
@@ -60,7 +57,7 @@ function CategoriesPage() {
     try {
       setDeletingId(id);
       await deleteCategory(id);
-      setCategories((prev) => prev.filter((entry) => (entry.id || entry._id) !== id));
+      await loadCategories();
       toast.success("Category deleted.");
     } catch (error) {
       toast.error(getApiErrorMessage(error));
