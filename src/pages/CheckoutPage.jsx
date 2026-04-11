@@ -502,10 +502,7 @@ function CheckoutInner({ stripeEnabled }) {
                 <input type="radio" className="accent-brand" checked={paymentMethod === "card"} onChange={() => setPaymentMethod("card")} disabled={!stripeEnabled} />
                 Card Payment
               </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" className="accent-brand" checked={paymentMethod === "other"} onChange={() => setPaymentMethod("other")} />
-                Other payment method (placeholder)
-              </label>
+              
             </div>
 
             {paymentMethod === "card" && stripeEnabled && (
