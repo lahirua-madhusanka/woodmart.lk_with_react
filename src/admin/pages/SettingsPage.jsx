@@ -35,20 +35,28 @@ const normalizeSlides = (slides = []) =>
 
 function SettingsPage() {
   const [settings, setSettings] = useState(null);
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingHeroImageIndex, setUploadingHeroImageIndex] = useState(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await getSettings();
-        setSettings(data);
-      } catch (error) {
-        toast.error(getApiErrorMessage(error));
-      }
-    };
+  const loadSettings = async () => {
+    setLoadingSettings(true);
+    setLoadError("");
+    try {
+      const data = await getSettings();
+      setSettings(data);
+    } catch (error) {
+      setLoadError(getApiErrorMessage(error));
+      setSettings(null);
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
 
-    load();
+  useEffect(() => {
+    loadSettings();
   }, []);
 
   const setField = (key) => (event) => {
@@ -172,8 +180,24 @@ function SettingsPage() {
     }
   };
 
-  if (!settings) {
+  if (loadingSettings) {
     return <Loader label="Loading settings..." />;
+  }
+
+  if (!settings) {
+    return (
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
+        <h2 className="text-base font-semibold text-rose-700">Unable to load settings</h2>
+        <p className="mt-1 text-sm text-rose-700">{loadError || "Please try again."}</p>
+        <button
+          type="button"
+          onClick={loadSettings}
+          className="mt-3 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   return (

@@ -23,7 +23,7 @@ function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
-  const [deleteId, setDeleteId] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
 
@@ -58,12 +58,14 @@ function ProductsPage() {
   const { page, totalPages, data, setPage } = usePagination(filtered, 8);
 
   const handleDelete = async () => {
-    if (!deleteId) return;
+    const targetId = deleteTarget?._id;
+    if (!targetId) return;
+
     setDeleting(true);
     try {
-      await deleteProduct(deleteId);
+      await deleteProduct(targetId);
       await loadProducts();
-      setDeleteId("");
+      setDeleteTarget(null);
       toast.success("Product deleted");
     } catch (error) {
       toast.error(getApiErrorMessage(error));
@@ -173,7 +175,7 @@ function ProductsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDeleteId(row._id)}
+                  onClick={() => setDeleteTarget({ _id: row._id, name: row.name })}
                   className="rounded-md border border-red-200 p-2 text-red-600 hover:bg-red-50"
                 >
                   <Trash2 size={14} />
@@ -208,11 +210,15 @@ function ProductsPage() {
       </div>
 
       <ConfirmDeleteModal
-        open={Boolean(deleteId)}
+        open={Boolean(deleteTarget)}
         title="Delete Product"
-        message="This action cannot be undone. The product will be removed permanently."
+        message={`Are you sure you want to delete this product${
+          deleteTarget?.name ? `: ${deleteTarget.name}` : ""
+        }? This action cannot be undone.`}
+        confirmText="Delete Product"
+        cancelText="Cancel"
         onConfirm={handleDelete}
-        onClose={() => setDeleteId("")}
+        onClose={() => setDeleteTarget(null)}
         loading={deleting}
       />
     </div>

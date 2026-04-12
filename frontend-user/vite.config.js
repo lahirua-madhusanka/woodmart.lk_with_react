@@ -10,8 +10,11 @@ export default defineConfig({
   base: process.env.VITE_BASE_PATH || "/",
   plugins: [react()],
   resolve: {
+    dedupe: ["react", "react-dom"],
     alias: {
       "@shared": path.resolve(__dirname, "../src"),
+      react: path.resolve(__dirname, "../node_modules/react"),
+      "react-dom": path.resolve(__dirname, "../node_modules/react-dom"),
     },
   },
   server: {

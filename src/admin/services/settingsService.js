@@ -1,4 +1,4 @@
-import { get, post, put, safeRequest } from "./adminApi";
+import { get, post, put } from "./adminApi";
 
 const defaultSettings = {
   storeName: "Woodmart.lk",
@@ -97,8 +97,8 @@ const normalizeSettings = (data = {}) => {
 };
 
 export const getSettings = async () => {
-  const data = await safeRequest(() => get("/admin/settings", { params: { _: Date.now() } }), defaultSettings);
-  return normalizeSettings(data);
+  const response = await get("/admin/settings", { params: { _: Date.now() } });
+  return normalizeSettings(response?.data ?? response);
 };
 
 export const saveSettings = async (payload) => {

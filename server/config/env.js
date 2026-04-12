@@ -3,6 +3,28 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const clean = (value) => String(value || "").trim();
+const nodeEnv = process.env.NODE_ENV || "development";
+
+const configuredClientUrl = clean(process.env.CLIENT_URL);
+const configuredClientUrls = String(process.env.CLIENT_URLS || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+const defaultDevClientUrls = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5174",
+];
+
+const clientUrl = configuredClientUrl || "http://localhost:5173";
+const clientUrls = Array.from(
+  new Set([
+    ...configuredClientUrls,
+    ...(nodeEnv === "development" ? defaultDevClientUrls : []),
+  ])
+);
 
 const required = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "JWT_SECRET"];
 
@@ -13,18 +35,15 @@ for (const key of required) {
 }
 
 const env = {
-  nodeEnv: process.env.NODE_ENV || "development",
+  nodeEnv,
   port: Number(process.env.PORT || 5000),
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
-  clientUrl: clean(process.env.CLIENT_URL) || "http://localhost:5173",
-  clientUrls: String(process.env.CLIENT_URLS || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean),
+  clientUrl,
+  clientUrls,
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || "",
   smtpHost: clean(process.env.SMTP_HOST),
   smtpPort: Number(process.env.SMTP_PORT || 587),
