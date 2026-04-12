@@ -1,11 +1,13 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import PrivateRoute from "../components/auth/PrivateRoute";
 import PageFallbackLoader from "../components/common/PageFallbackLoader";
 import MainLayout from "../components/layout/MainLayout";
 
 const HomePage = lazy(() => import("../pages/HomePage"));
 const ShopPage = lazy(() => import("../pages/ShopPage"));
+const PromotionsPage = lazy(() => import("../pages/PromotionsPage"));
+const PromotionDetailsPage = lazy(() => import("../pages/PromotionDetailsPage"));
 const SearchResultsPage = lazy(() => import("../pages/SearchResultsPage"));
 const ProductDetailsPage = lazy(() => import("../pages/ProductDetailsPage"));
 const CartPage = lazy(() => import("../pages/CartPage"));
@@ -35,12 +37,20 @@ const withSuspense = (node, label) => (
   <Suspense fallback={<PageFallbackLoader label={label} />}>{node}</Suspense>
 );
 
+function LegacyPromotionSlugRedirect() {
+  const { slug } = useParams();
+  return <Navigate to={`/promotion/${encodeURIComponent(slug || "")}`} replace />;
+}
+
 function UserApp() {
   return (
     <Routes>
       <Route path="/" element={<MainLayout />}>
         <Route index element={withSuspense(<HomePage />, "Loading home...")} />
         <Route path="shop" element={withSuspense(<ShopPage />, "Loading shop...")} />
+        <Route path="promotions" element={withSuspense(<PromotionsPage />, "Loading promotions...")} />
+        <Route path="promotions/:slug" element={<LegacyPromotionSlugRedirect />} />
+        <Route path="promotion/:slug" element={withSuspense(<PromotionDetailsPage />, "Loading promotion...")} />
         <Route path="search" element={withSuspense(<SearchResultsPage />, "Searching products...")} />
         <Route path="product/:id" element={withSuspense(<ProductDetailsPage />, "Loading product...")} />
         <Route
