@@ -107,6 +107,44 @@ function PromotionsPage() {
     setForm(initialForm);
   };
 
+  const copyPromotionUrl = async (promotion) => {
+    const slug = String(promotion?.slug || "").trim();
+    if (!slug) {
+      toast.error("Promotion slug is missing");
+      return;
+    }
+
+    const url = `${window.location.origin}/promotion/${encodeURIComponent(slug)}`;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Promotion URL copied");
+      return;
+    } catch {
+      // Fallback for environments without clipboard permissions.
+    }
+
+    try {
+      const helper = document.createElement("textarea");
+      helper.value = url;
+      helper.setAttribute("readonly", "");
+      helper.style.position = "fixed";
+      helper.style.left = "-9999px";
+      document.body.appendChild(helper);
+      helper.select();
+      const copied = document.execCommand("copy");
+      document.body.removeChild(helper);
+
+      if (copied) {
+        toast.success("Promotion URL copied");
+      } else {
+        toast.info("Copy not supported. URL: " + url);
+      }
+    } catch {
+      toast.info("Copy not supported. URL: " + url);
+    }
+  };
+
   const handleFieldChange = (field) => (event) => {
     const value = event.target.value;
     setForm((prev) => {
@@ -339,6 +377,13 @@ function PromotionsPage() {
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => startEdit(row)} className="rounded-md border border-slate-300 p-2 text-slate-700">
                   <Pencil size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => copyPromotionUrl(row)}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  Copy URL
                 </button>
                 <button type="button" onClick={() => openProductManager(row.id)} className="rounded-md border border-slate-300 px-2 py-1 text-xs">
                   Products
