@@ -216,13 +216,26 @@ export const registerUser = asyncHandler(async (req, res) => {
     email: createdUser.email,
   });
 
-  await sendVerificationToUser({
-    req,
-    userId: createdUser.id,
-    email: createdUser.email,
-    name: createdUser.name,
-    awaitDelivery: false,
-  });
+  try {
+    await sendVerificationToUser({
+      req,
+      userId: createdUser.id,
+      email: createdUser.email,
+      name: createdUser.name,
+      awaitDelivery: true,
+    });
+  } catch (error) {
+    authLog("verification_email_send_failed", {
+      userId: createdUser.id,
+      email: createdUser.email,
+      message: error?.message || "Unknown error",
+      statusCode: error?.statusCode || null,
+      providerStatus: error?.providerStatus || null,
+    });
+
+    res.status(error?.statusCode || 502);
+    throw new Error("Unable to send verification email right now. Please try again.");
+  }
 
   authLog("verification_email_queued", {
     userId: createdUser.id,
