@@ -1120,22 +1120,23 @@ export const getAdminProfitReport = asyncHandler(async (req, res) => {
   const normalizeItemMetrics = (item = {}) => {
     const quantity = Number(item.quantity || 0);
     const unitPrice = orderNumber(item.price);
+    const originalPrice = orderNumber(item.listPrice ?? item.price);
     const discountAmount = orderNumber(item.discountAmount);
     const shippingPrice = orderNumber(item.shippingPrice);
     const productCost = orderNumber(item.productCost);
 
-    const lineSubtotal = orderNumber(item.lineSubtotal) || unitPrice * quantity;
+    // Use original (pre-discount) price for profit calculation
+    const lineOriginalTotal = originalPrice * quantity;
     const lineShippingTotal = orderNumber(item.lineShippingTotal) || shippingPrice * quantity;
     const lineDiscountTotal = orderNumber(item.lineDiscountTotal) || discountAmount * quantity;
     const lineProductCostTotal = orderNumber(item.lineProductCostTotal) || productCost * quantity;
-    const lineTotal = orderNumber(item.lineTotal) || lineSubtotal + lineShippingTotal;
+    const lineTotal = orderNumber(item.lineTotal) || (unitPrice * quantity) + lineShippingTotal;
     const lineProfitTotal =
-      orderNumber(item.lineProfitTotal) ||
-      lineSubtotal - (lineProductCostTotal + lineShippingTotal + lineDiscountTotal);
+      lineOriginalTotal - (lineProductCostTotal + lineShippingTotal + lineDiscountTotal);
 
     return {
       quantity,
-      lineSubtotal,
+      lineSubtotal: unitPrice * quantity,
       lineShippingTotal,
       lineDiscountTotal,
       lineProductCostTotal,
@@ -1159,7 +1160,9 @@ export const getAdminProfitReport = asyncHandler(async (req, res) => {
     const discount = orderNumber(order.discountTotal) || itemsDiscount;
     const productCost = orderNumber(order.productCostTotal) || itemsProductCost;
     const total = orderNumber(order.totalAmount) || subtotal + shipping;
-    const profit = orderNumber(order.profitTotal) || subtotal - (productCost + shipping + discount);
+
+    // Updated profit calculation: profit = subtotal - (productCost + shipping)
+    const profit = subtotal - (productCost + shipping);
 
     return {
       items,

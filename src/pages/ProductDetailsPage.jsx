@@ -354,7 +354,7 @@ function ProductDetailsPage() {
       <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <img src={selectedImage} alt={product.name} className="h-[500px] w-full object-cover" />
+            <img src={selectedImage} alt={product.name} className="w-full h-full object-cover" />
             {!inStock && (
               <span className="absolute left-4 top-4 rounded-full bg-red-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
                 Out of stock
@@ -362,15 +362,19 @@ function ProductDetailsPage() {
             )}
           </div>
           <div className="mt-3 grid grid-cols-4 gap-3 sm:grid-cols-5">
-            {gallery.map((image) => (
+           {gallery.map((image) => (
               <button
                 key={image}
                 onClick={() => setSelectedImage(image)}
-                className={`overflow-hidden rounded-lg border ${
+                className={`border ${
                   image === selectedImage ? "border-brand" : "border-slate-200"
                 }`}
               >
-                <img src={image} alt={product.name} className="h-24 w-full object-cover" />
+                <img
+                  src={image}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                />
               </button>
             ))}
           </div>

@@ -39,10 +39,10 @@ function CategorySection({ categories }) {
                     alt={category.name}
                     loading="lazy"
                     decoding="async"
-                    className="h-44 w-full object-cover transition duration-500 group-hover:scale-105"
+                    className="w-full h-44 object-cover transition duration-500 group-hover:scale-105"
                   />
                 ) : (
-                  <div className="h-44 w-full bg-slate-100" />
+                  <div className="h-full w-44 bg-slate-100" />
                 )}
               </div>
               <div className="p-4">

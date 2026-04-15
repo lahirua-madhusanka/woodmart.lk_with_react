@@ -39,14 +39,13 @@ function ProductCard({ product }) {
         <RoutePrefetchLink to={`/product/${productId}`} routeKey="productDetails" {...detailsPrefetch}>
           {!imageLoaded && <div className="absolute inset-0 animate-pulse bg-slate-200" />}
           <img
-            src={productImage}
-            alt={product.name}
-            loading="lazy"
-            decoding="async"
-            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-            onLoad={() => setImageLoaded(true)}
-            className="h-64 w-full object-cover transition duration-500 group-hover:scale-105"
-          />
+              src={productImage}
+              alt={product.name}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setImageLoaded(true)}
+              className="w-full aspect-square object-cover transition duration-500 group-hover:scale-105"
+            />
         </RoutePrefetchLink>
         {pricing.hasDiscount ? (
           <span className="absolute left-3 top-3 rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white">
