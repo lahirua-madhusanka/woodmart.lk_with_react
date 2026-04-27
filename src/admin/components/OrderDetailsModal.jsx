@@ -725,7 +725,7 @@ function OrderDetailsModal({ order, open, onClose, onOrderUpdated, loading = fal
 
             <footer class="invoice-footer">
               <p>Thank you for shopping with Woodmart.lk.</p>
-              <p>For support: support@woodmart.lk | +94 00 000 0000</p>
+              <p>For support: support@woodmart.lk | +94 76 065 9957</p>
               <p>This is a system-generated invoice for order processing.</p>
             </footer>
           </main>
