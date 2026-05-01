@@ -55,8 +55,8 @@ function HomePage() {
     (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
   );
 
-  const bestSelling = sortedByRating.slice(0, 6);
-  const newArrivals = sortedByNew.slice(0, 6);
+  const bestSelling = sortedByRating.slice(0, 8);
+  const newArrivals = sortedByNew.slice(0, 8);
   const customerTestimonials = useMemo(() => {
     const reviews = [];
 
