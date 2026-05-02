@@ -395,24 +395,12 @@ export const getProducts = asyncHandler(async (req, res) => {
     throw new Error(error.message);
   }
 
-  // PostgREST embed-fallback: if the nested `product_variations(...)` array came back
-  // empty for ALL products (typically due to a stale schema cache or missing FK detection),
-  // fetch variations in a separate query and stitch them onto the rows. This guarantees
-  // production behaves the same as local even if PostgREST embedding misbehaves.
+  // ALWAYS fetch variations in a separate query and overwrite whatever the embed returned.
+  // This guarantees correctness regardless of PostgREST schema cache / FK detection state.
   const rawRows = Array.isArray(data) ? data : [];
-  const totalEmbedded = rawRows.reduce(
-    (acc, row) => acc + (Array.isArray(row?.product_variations) ? row.product_variations.length : 0),
-    0
-  );
-  if (rawRows.length > 0 && totalEmbedded === 0) {
+  if (rawRows.length) {
     const productIds = rawRows.map((row) => row.id).filter(Boolean);
     if (productIds.length) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        "[getProducts] embedded product_variations was EMPTY for",
-        productIds.length,
-        "products; falling back to separate query"
-      );
       const tryFetchVariations = async (cols) =>
         supabase.from("product_variations").select(cols).in("product_id", productIds);
 
@@ -429,7 +417,7 @@ export const getProducts = asyncHandler(async (req, res) => {
       }
       if (varRes.error) {
         // eslint-disable-next-line no-console
-        console.error("[getProducts] variation fallback query failed:", varRes.error.message);
+        console.error("[getProducts] variation fetch failed:", varRes.error.message);
       } else {
         const variationsByProduct = new Map();
         for (const row of varRes.data || []) {
@@ -442,10 +430,12 @@ export const getProducts = asyncHandler(async (req, res) => {
         }
         // eslint-disable-next-line no-console
         console.log(
-          "[getProducts] fallback attached",
+          "[getProducts] attached",
           varRes.data?.length || 0,
           "variations across",
           variationsByProduct.size,
+          "of",
+          rawRows.length,
           "products"
         );
       }
@@ -488,8 +478,8 @@ export const getProductById = asyncHandler(async (req, res) => {
     throw new Error("Product not found");
   }
 
-  // PostgREST embed-fallback: if nested variations is empty, fetch them separately.
-  if (!Array.isArray(data.product_variations) || data.product_variations.length === 0) {
+  // ALWAYS fetch variations separately (do not rely on PostgREST embed in production).
+  {
     const tryFetch = async (cols) =>
       supabase.from("product_variations").select(cols).eq("product_id", data.id);
 
@@ -504,10 +494,13 @@ export const getProductById = asyncHandler(async (req, res) => {
         "id, product_id, variation_name, price, discounted_price, cost, stock, sku, image_url, sort_order"
       );
     }
-    if (!varRes.error && Array.isArray(varRes.data) && varRes.data.length) {
+    if (!varRes.error) {
+      data.product_variations = Array.isArray(varRes.data) ? varRes.data : [];
       // eslint-disable-next-line no-console
-      console.log("[getProductById] fallback attached", varRes.data.length, "variations for", data.id);
-      data.product_variations = varRes.data;
+      console.log("[getProductById] attached", data.product_variations.length, "variations for", data.id);
+    } else {
+      // eslint-disable-next-line no-console
+      console.error("[getProductById] variation fetch failed:", varRes.error.message);
     }
   }
 
