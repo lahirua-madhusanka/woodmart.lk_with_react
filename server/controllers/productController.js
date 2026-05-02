@@ -395,7 +395,64 @@ export const getProducts = asyncHandler(async (req, res) => {
     throw new Error(error.message);
   }
 
-  let products = (data || []).map(mapProduct);
+  // PostgREST embed-fallback: if the nested `product_variations(...)` array came back
+  // empty for ALL products (typically due to a stale schema cache or missing FK detection),
+  // fetch variations in a separate query and stitch them onto the rows. This guarantees
+  // production behaves the same as local even if PostgREST embedding misbehaves.
+  const rawRows = Array.isArray(data) ? data : [];
+  const totalEmbedded = rawRows.reduce(
+    (acc, row) => acc + (Array.isArray(row?.product_variations) ? row.product_variations.length : 0),
+    0
+  );
+  if (rawRows.length > 0 && totalEmbedded === 0) {
+    const productIds = rawRows.map((row) => row.id).filter(Boolean);
+    if (productIds.length) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[getProducts] embedded product_variations was EMPTY for",
+        productIds.length,
+        "products; falling back to separate query"
+      );
+      const tryFetchVariations = async (cols) =>
+        supabase.from("product_variations").select(cols).in("product_id", productIds);
+
+      let varRes = await tryFetchVariations(
+        "id, product_id, name, price, discounted_price, cost, stock, sku, image_url, sort_order"
+      );
+      if (varRes.error && isMissingVariationSellingColumnError(varRes.error.message)) {
+        varRes = await tryFetchVariations("id, product_id, name, price, sku, image_url, sort_order");
+      }
+      if (varRes.error && isMissingVariationNameColumnError(varRes.error.message)) {
+        varRes = await tryFetchVariations(
+          "id, product_id, variation_name, price, discounted_price, cost, stock, sku, image_url, sort_order"
+        );
+      }
+      if (varRes.error) {
+        // eslint-disable-next-line no-console
+        console.error("[getProducts] variation fallback query failed:", varRes.error.message);
+      } else {
+        const variationsByProduct = new Map();
+        for (const row of varRes.data || []) {
+          const key = row.product_id;
+          if (!variationsByProduct.has(key)) variationsByProduct.set(key, []);
+          variationsByProduct.get(key).push(row);
+        }
+        for (const row of rawRows) {
+          row.product_variations = variationsByProduct.get(row.id) || [];
+        }
+        // eslint-disable-next-line no-console
+        console.log(
+          "[getProducts] fallback attached",
+          varRes.data?.length || 0,
+          "variations across",
+          variationsByProduct.size,
+          "products"
+        );
+      }
+    }
+  }
+
+  let products = rawRows.map(mapProduct);
   products = await enrichProductsWithPromotions(products);
 
   if (sort === "priceAsc") {
@@ -429,6 +486,29 @@ export const getProductById = asyncHandler(async (req, res) => {
   if (!data) {
     res.status(404);
     throw new Error("Product not found");
+  }
+
+  // PostgREST embed-fallback: if nested variations is empty, fetch them separately.
+  if (!Array.isArray(data.product_variations) || data.product_variations.length === 0) {
+    const tryFetch = async (cols) =>
+      supabase.from("product_variations").select(cols).eq("product_id", data.id);
+
+    let varRes = await tryFetch(
+      "id, product_id, name, price, discounted_price, cost, stock, sku, image_url, sort_order"
+    );
+    if (varRes.error && isMissingVariationSellingColumnError(varRes.error.message)) {
+      varRes = await tryFetch("id, product_id, name, price, sku, image_url, sort_order");
+    }
+    if (varRes.error && isMissingVariationNameColumnError(varRes.error.message)) {
+      varRes = await tryFetch(
+        "id, product_id, variation_name, price, discounted_price, cost, stock, sku, image_url, sort_order"
+      );
+    }
+    if (!varRes.error && Array.isArray(varRes.data) && varRes.data.length) {
+      // eslint-disable-next-line no-console
+      console.log("[getProductById] fallback attached", varRes.data.length, "variations for", data.id);
+      data.product_variations = varRes.data;
+    }
   }
 
   const product = mapProduct(data);
