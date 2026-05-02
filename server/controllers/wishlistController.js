@@ -3,7 +3,7 @@ import supabase from "../config/supabase.js";
 import { mapProduct } from "../utils/dbMappers.js";
 
 const productSelect =
-  "id, name, description, price, discount_price, category, stock, rating, created_at, updated_at, product_images(image_url, sort_order), product_reviews(id, user_id, name, rating, comment, created_at, updated_at)";
+  "id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, name, price, discounted_price, cost, stock, sku, image_url, sort_order), product_reviews(id, user_id, name, rating, comment, created_at, updated_at)";
 
 const loadWishlistProducts = async (userId) => {
   const { data, error } = await supabase

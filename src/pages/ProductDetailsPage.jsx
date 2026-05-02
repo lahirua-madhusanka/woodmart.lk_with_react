@@ -1,4 +1,4 @@
-import { Heart, Minus, Plus, ShieldCheck, ShoppingBag, Truck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Heart, Minus, Plus, ShieldCheck, ShoppingBag, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -10,7 +10,7 @@ import { useStore } from "../context/StoreContext";
 import { useAuth } from "../context/AuthContext";
 import { useStorefrontSettings } from "../context/StorefrontSettingsContext";
 import { getApiErrorMessage } from "../services/apiClient";
-import { getProductPricing } from "../utils/pricing";
+import { getProductPricing, getVariationPricing } from "../utils/pricing";
 import {
   addProductReviewApi,
   getProductByIdApi,
@@ -55,7 +55,9 @@ function ProductDetailsPage() {
   const [loadingRemoteProduct, setLoadingRemoteProduct] = useState(false);
   const productFromStore = products.find((item) => getProductId(item) === String(id));
   const product = productFromStore || remoteProduct;
-  const [selectedImage, setSelectedImage] = useState("");
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [selectedVariationId, setSelectedVariationId] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState("description");
   const [review, setReview] = useState({ rating: 5, comment: "" });
@@ -98,26 +100,47 @@ function ProductDetailsPage() {
     };
   }, [id, loadingProducts, productFromStore]);
 
+  const variations = useMemo(() => (Array.isArray(product?.variations) ? product.variations : []), [product]);
+
   const gallery = useMemo(() => {
     const images = product?.images || product?.gallery || [];
-    if (images.length) return images;
-    return product?.image ? [product.image] : [];
-  }, [product]);
+    const variationImages = variations.map((variation) => variation.imageUrl).filter(Boolean);
+    const combined = [...images, ...variationImages, product?.image].filter(Boolean);
+    return Array.from(new Set(combined));
+  }, [product, variations]);
 
   const productId = product ? getProductId(product) : "";
-  const stockValue = Number(product?.stock ?? product?.countInStock ?? -1);
+  const brand = product?.brand || settings.storeName;
+  const activeVariation = variations.find((variation) => String(variation.id) === String(selectedVariationId)) || null;
+  const stockValue = Number(activeVariation?.stock ?? -1);
   const hasStockLimit = Number.isFinite(stockValue) && stockValue >= 0;
   const inStock = !hasStockLimit || stockValue > 0;
   const maxQuantity = hasStockLimit && stockValue > 0 ? stockValue : 99;
-  const brand = product?.brand || settings.storeName;
-  const sku = product?.sku || "Not specified";
+  const sku = activeVariation?.sku || "Not specified";
 
   useEffect(() => {
+    if (variations.length) {
+      setSelectedVariationId(String(variations[0].id));
+    } else {
+      setSelectedVariationId("");
+    }
+
     if (gallery.length) {
-      setSelectedImage(gallery[0]);
+      setActiveImageIndex(0);
       setQuantity(1);
     }
-  }, [gallery, productId]);
+  }, [gallery, productId, variations]);
+
+  useEffect(() => {
+    if (!selectedVariationId) return;
+    const selectedVariation = variations.find((variation) => String(variation.id) === String(selectedVariationId));
+    const imageUrl = selectedVariation?.imageUrl;
+    if (!imageUrl) return;
+    const index = gallery.findIndex((image) => image === imageUrl);
+    if (index >= 0) {
+      setActiveImageIndex(index);
+    }
+  }, [gallery, selectedVariationId, variations]);
 
   useEffect(() => {
     setLocalReviews(Array.isArray(product?.reviews) ? product.reviews : []);
@@ -249,7 +272,7 @@ function ProductDetailsPage() {
   }
 
   const inWishlist = wishlist.includes(productId);
-  const pricing = getProductPricing(product || {});
+  const pricing = activeVariation ? getVariationPricing(activeVariation, { product }) : getProductPricing(product);
   const unitPrice = Number(pricing.finalPrice || 0);
   const regularPrice = Number(pricing.originalPrice || unitPrice);
   const hasDiscount = Boolean(pricing.hasDiscount);
@@ -277,7 +300,11 @@ function ProductDetailsPage() {
       toast.error("This product is currently out of stock");
       return;
     }
-    await addToCart(productId, quantity);
+    if (variations.length && !activeVariation) {
+      toast.error("Please select a variation");
+      return;
+    }
+    await addToCart(productId, quantity, activeVariation);
   };
 
   const onBuyNow = async () => {
@@ -291,8 +318,25 @@ function ProductDetailsPage() {
       return;
     }
 
-    await addToCart(productId, quantity);
+    if (variations.length && !activeVariation) {
+      toast.error("Please select a variation");
+      return;
+    }
+
+    await addToCart(productId, quantity, activeVariation);
     navigate("/checkout");
+  };
+
+  const selectedImage = gallery[activeImageIndex] || product?.image || "";
+
+  const showPrevImage = () => {
+    if (!gallery.length) return;
+    setActiveImageIndex((current) => (current - 1 + gallery.length) % gallery.length);
+  };
+
+  const showNextImage = () => {
+    if (!gallery.length) return;
+    setActiveImageIndex((current) => (current + 1) % gallery.length);
   };
 
   const onSubmitReview = async (event) => {
@@ -352,10 +396,86 @@ function ProductDetailsPage() {
         <Link to="/" className="hover:text-brand">Home</Link> / <Link to="/shop" className="hover:text-brand">Shop</Link> / {product.name}
       </div>
 
+      {isGalleryOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4">
+          <div className="relative w-full max-w-7xl rounded-2xl bg-white p-4 shadow-xl">
+            <button
+              type="button"
+              onClick={() => setIsGalleryOpen(false)}
+              className="absolute right-4 top-4 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+            >
+              Close
+            </button>
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={showPrevImage}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                disabled={gallery.length < 2}
+              >
+                Prev
+              </button>
+              <div className="flex-1">
+                <div className="flex h-[85vh] items-center justify-center rounded-xl bg-slate-50">
+                  {selectedImage ? (
+                    <img
+                      src={selectedImage}
+                      alt={product.name}
+                      className="max-h-[85vh] w-auto max-w-full rounded-lg object-contain"
+                    />
+                  ) : (
+                    <div className="text-sm text-muted">Image not available</div>
+                  )}
+                </div>
+                <p className="mt-3 text-center text-xs text-muted">
+                  {gallery.length ? activeImageIndex + 1 : 0} of {gallery.length}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={showNextImage}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                disabled={gallery.length < 2}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <img src={selectedImage} alt={product.name} className="w-full h-full object-cover" />
+            <button type="button" onClick={() => setIsGalleryOpen(true)} className="block w-full">
+              <img src={selectedImage} alt={product.name} className="w-full h-full object-cover" />
+            </button>
+            {gallery.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    showPrevImage();
+                  }}
+                  aria-label="Previous image"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2 text-slate-700 shadow-md ring-1 ring-slate-200 hover:bg-white"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    showNextImage();
+                  }}
+                  aria-label="Next image"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2 text-slate-700 shadow-md ring-1 ring-slate-200 hover:bg-white"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </>
+            )}
             {!inStock && (
               <span className="absolute left-4 top-4 rounded-full bg-red-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
                 Out of stock
@@ -363,12 +483,12 @@ function ProductDetailsPage() {
             )}
           </div>
           <div className="mt-3 grid grid-cols-4 gap-3 sm:grid-cols-5">
-           {gallery.map((image) => (
+            {gallery.map((image, index) => (
               <button
-                key={image}
-                onClick={() => setSelectedImage(image)}
-                className={`border ${
-                  image === selectedImage ? "border-brand" : "border-slate-200"
+                key={`${image}-${index}`}
+                onClick={() => setActiveImageIndex(index)}
+                className={`overflow-hidden rounded-lg border ${
+                  index === activeImageIndex ? "border-brand" : "border-slate-200"
                 }`}
               >
                 <img
@@ -410,12 +530,6 @@ function ProductDetailsPage() {
             )}
           </div>
 
-          {pricing.promotionActive && pricing.promotion?.title ? (
-            <p className="mt-2 text-sm font-medium text-emerald-700">
-              Promotion applied: {pricing.promotion.title}
-            </p>
-          ) : null}
-
           <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
             <span className={`rounded-full px-2 py-1 font-semibold ${inStock ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
               {inStock ? "In stock" : "Out of stock"}
@@ -426,6 +540,36 @@ function ProductDetailsPage() {
               </span>
             ) : null}
           </div>
+
+          {variations.length ? (
+            <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-sm font-semibold text-ink">Choose a variation</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {variations.map((variation) => {
+                  const isActive = String(variation.id) === String(selectedVariationId);
+                  return (
+                    <button
+                      key={variation.id}
+                      type="button"
+                      onClick={() => setSelectedVariationId(String(variation.id))}
+                      className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                        isActive
+                          ? "border-brand bg-brand text-white"
+                          : "border-slate-200 text-slate-700 hover:border-brand"
+                      }`}
+                    >
+                      {variation.name || variation.variation_name || "Variation"}
+                    </button>
+                  );
+                })}
+              </div>
+              {activeVariation ? (
+                <p className="mt-3 text-xs text-muted">
+                  SKU: {activeVariation.sku || "-"} | Price: {formatMoney(getVariationPricing(activeVariation, { product }).finalPrice)}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="mt-6 grid gap-3 sm:grid-cols-[auto_1fr_1fr]">
             <div className="inline-flex items-center rounded-lg border border-slate-300 bg-white">

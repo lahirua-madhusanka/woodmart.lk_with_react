@@ -9,6 +9,7 @@ import {
   getAdminCategoriesApi,
   getAdminProductsApi,
 } from "../../services/adminApi/productsService";
+import { getProductPricing } from "../../utils/pricing";
 
 const DataTable = lazy(() => import("../../components/admin/DataTable"));
 const ConfirmModal = lazy(() => import("../../components/admin/ConfirmModal"));
@@ -67,6 +68,10 @@ function AdminProductsPage() {
     }
   };
 
+  const getTotalStock = (product) =>
+    (Array.isArray(product?.variations) ? product.variations : [])
+      .reduce((sum, variation) => sum + Number(variation?.stock || 0), 0);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -123,12 +128,15 @@ function AdminProductsPage() {
             {
               key: "price",
               label: "Price",
-              render: (row) => `Rs. ${Number(row.discountPrice || row.price).toFixed(2)}`,
+              render: (row) => {
+                const pricing = getProductPricing(row);
+                return `Rs. ${Number(pricing.finalPrice || 0).toFixed(2)}`;
+              },
             },
             {
               key: "stock",
               label: "Stock",
-              render: (row) => row.stock,
+              render: (row) => getTotalStock(row) || row.stock || 0,
             },
             {
               key: "rating",
@@ -138,7 +146,10 @@ function AdminProductsPage() {
             {
               key: "status",
               label: "Status",
-              render: (row) => <StatusBadge value={row.stock <= 10 ? "low" : "active"} />,
+              render: (row) => {
+                const totalStock = getTotalStock(row) || row.stock || 0;
+                return <StatusBadge value={totalStock <= 10 ? "low" : "active"} />;
+              },
             },
             {
               key: "actions",

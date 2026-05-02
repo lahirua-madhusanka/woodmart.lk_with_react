@@ -3,18 +3,18 @@ import Stripe from "stripe";
 import env from "../config/env.js";
 import supabase from "../config/supabase.js";
 import { recordCouponUsageForOrder, validateCouponForCart } from "../services/couponEngine.js";
-import { attachPromotionPricingToProductRows } from "../services/promotionPricingService.js";
 import { addOrderStatusHistory, autoDeliverIfDue } from "../services/orderWorkflow.js";
 import { sendOrderConfirmationEmail } from "../services/orderConfirmationEmailService.js";
+import { getActivePromotionMapForProductIds } from "../services/promotionPricingService.js";
 import { mapOrder } from "../utils/dbMappers.js";
 
 const stripe = env.stripeSecretKey ? new Stripe(env.stripeSecretKey) : null;
 
 const orderSelect =
-  "id, user_id, subtotal_amount, shipping_total, discount_total, product_cost_total, profit_total, total_amount, payment_status, order_status, payment_method, payment_intent_id, transaction_id, paid_amount, tracking_number, courier_name, admin_note, tracking_added_at, shipped_at, out_for_delivery_at, delivered_at, returned_at, cancelled_at, invoice_number, coupon_id, coupon_code, coupon_title, coupon_discount_type, coupon_discount_value, coupon_discount_amount, created_at, updated_at, users:user_id(id, name, email), order_items(product_id, name, image, sku, price, list_price, discount_amount, product_cost, shipping_price, quantity, line_subtotal, line_shipping_total, line_discount_total, line_product_cost_total, line_total, line_profit_total, promotion_id, promotion_title, promotion_slug, promotion_discount_percentage, promotion_original_price, promotion_discounted_price, promotion_active), order_shipping_addresses(full_name, line1, line2, city, state, postal_code, country, phone), order_status_history(id, order_status, note, changed_by, changed_at, users:changed_by(name, email))";
+  "id, user_id, subtotal_amount, shipping_total, discount_total, product_cost_total, profit_total, total_amount, payment_status, order_status, payment_method, payment_intent_id, transaction_id, paid_amount, tracking_number, courier_name, admin_note, tracking_added_at, shipped_at, out_for_delivery_at, delivered_at, returned_at, cancelled_at, invoice_number, coupon_id, coupon_code, coupon_title, coupon_discount_type, coupon_discount_value, coupon_discount_amount, created_at, updated_at, users:user_id(id, name, email), order_items(product_id, name, image, sku, variation_id, variation_name, variation_sku, variation_image, variation_price, price, list_price, discount_amount, product_cost, shipping_price, quantity, line_subtotal, line_shipping_total, line_discount_total, line_product_cost_total, line_total, line_profit_total, promotion_id, promotion_title, promotion_slug, promotion_discount_percentage, promotion_original_price, promotion_discounted_price, promotion_active), order_shipping_addresses(full_name, line1, line2, city, state, postal_code, country, phone), order_status_history(id, order_status, note, changed_by, changed_at, users:changed_by(name, email))";
 
 const orderSelectLegacy =
-  "id, user_id, subtotal_amount, shipping_total, discount_total, product_cost_total, profit_total, total_amount, payment_status, order_status, payment_method, payment_intent_id, transaction_id, paid_amount, tracking_number, courier_name, admin_note, tracking_added_at, shipped_at, out_for_delivery_at, delivered_at, returned_at, cancelled_at, invoice_number, coupon_id, coupon_code, coupon_title, coupon_discount_type, coupon_discount_value, coupon_discount_amount, created_at, updated_at, users:user_id(id, name, email), order_items(product_id, name, image, sku, price, list_price, discount_amount, product_cost, shipping_price, quantity, line_subtotal, line_shipping_total, line_discount_total, line_product_cost_total, line_total, line_profit_total), order_shipping_addresses(full_name, line1, line2, city, state, postal_code, country, phone), order_status_history(id, order_status, note, changed_by, changed_at, users:changed_by(name, email))";
+  "id, user_id, subtotal_amount, shipping_total, discount_total, product_cost_total, profit_total, total_amount, payment_status, order_status, payment_method, payment_intent_id, transaction_id, paid_amount, tracking_number, courier_name, admin_note, tracking_added_at, shipped_at, out_for_delivery_at, delivered_at, returned_at, cancelled_at, invoice_number, coupon_id, coupon_code, coupon_title, coupon_discount_type, coupon_discount_value, coupon_discount_amount, created_at, updated_at, users:user_id(id, name, email), order_items(product_id, name, image, sku, variation_id, variation_name, variation_sku, variation_image, variation_price, price, list_price, discount_amount, product_cost, shipping_price, quantity, line_subtotal, line_shipping_total, line_discount_total, line_product_cost_total, line_total, line_profit_total), order_shipping_addresses(full_name, line1, line2, city, state, postal_code, country, phone), order_status_history(id, order_status, note, changed_by, changed_at, users:changed_by(name, email))";
 
 const mapAddressRow = (row) => ({
   id: row.id,
@@ -102,44 +102,43 @@ const loadCartWithProducts = async (userId) => {
     return { cart: null, items: [] };
   }
 
-  let { data: items, error: itemsError } = await supabase
-    .from("cart_items")
-    .select("product_id, quantity, products(id, name, sku, category, stock, price, discount_price, product_cost, shipping_price, product_images(image_url, sort_order))")
-    .eq("cart_id", cart.id);
+  const isMissingVariationNameColumnError = (message = "") => {
+    const lowered = String(message || "").toLowerCase();
+    return lowered.includes("product_variations") && lowered.includes("column") && (lowered.includes(".name") || lowered.includes('"name"'));
+  };
 
-  if (
-    itemsError &&
-    (isMissingColumnError(itemsError, "product_cost") ||
-      isMissingColumnError(itemsError, "shipping_price"))
-  ) {
-    const fallback = await supabase
+  const isMissingVariationSellingColumnError = (message = "") => {
+    const lowered = String(message || "").toLowerCase();
+    return lowered.includes("product_variations") && lowered.includes("column") && (lowered.includes("discounted_price") || lowered.includes("cost") || lowered.includes("stock"));
+  };
+
+  const runSelect = async (variationSelect) =>
+    supabase
       .from("cart_items")
-      .select("product_id, quantity, products(id, name, sku, category, stock, price, discount_price, product_images(image_url, sort_order))")
+      .select(
+        `product_id, variation_id, quantity, product_variations(${variationSelect}), products(id, name, category, shipping_price, product_images(image_url, sort_order))`
+      )
       .eq("cart_id", cart.id);
 
-    items = (fallback.data || []).map((entry) => ({
-      ...entry,
-      products: entry.products
-        ? { ...entry.products, product_cost: 0, shipping_price: 0, category: entry.products.category || "", sku: entry.products.sku || "" }
-        : entry.products,
-    }));
-    itemsError = fallback.error;
+  let result = await runSelect("id, name, sku, price, discounted_price, cost, stock, image_url");
+
+  if (result.error && isMissingVariationSellingColumnError(result.error.message)) {
+    result = await runSelect("id, name, sku, price, image_url");
   }
 
-  if (itemsError) {
-    throw new Error(itemsError.message);
+  if (result.error && isMissingVariationNameColumnError(result.error.message)) {
+    result = await runSelect("id, variation_name, sku, price, discounted_price, cost, stock, image_url");
   }
 
-  const productRows = (items || []).map((entry) => entry.products).filter(Boolean);
-  const pricedRows = await attachPromotionPricingToProductRows(productRows);
-  const pricedMap = new Map(pricedRows.map((row) => [row.id, row]));
+  if (result.error && isMissingVariationSellingColumnError(result.error.message)) {
+    result = await runSelect("id, variation_name, sku, price, image_url");
+  }
 
-  const pricedItems = (items || []).map((entry) => ({
-    ...entry,
-    products: entry.products ? pricedMap.get(entry.products.id) || entry.products : null,
-  }));
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
 
-  return { cart, items: pricedItems };
+  return { cart, items: result.data || [] };
 };
 
 export const createPaymentIntent = asyncHandler(async (req, res) => {
@@ -175,28 +174,48 @@ export const createOrder = asyncHandler(async (req, res) => {
     throw new Error("Cart is empty");
   }
 
+  const resolveVariationName = (variation = {}) =>
+    variation.name ?? variation.variation_name ?? "";
+
+  const resolveVariationUnitPrice = (variation = {}) => {
+    const price = Number(variation.price || 0);
+    const discounted = variation.discounted_price == null ? null : Number(variation.discounted_price);
+    if (Number.isFinite(discounted) && discounted > 0 && discounted < price) {
+      return discounted;
+    }
+    return price;
+  };
+
   for (const item of items) {
     if (!item.products) {
       res.status(400);
       throw new Error("One or more products in cart no longer exist");
     }
-    if (item.quantity > item.products.stock) {
+    if (!item.variation_id || !item.product_variations) {
+      res.status(400);
+      throw new Error(`Cart item for ${item.products.name} is missing a variation selection`);
+    }
+
+    if (Number(item.quantity || 0) > Number(item.product_variations.stock || 0)) {
       res.status(400);
       throw new Error(`Insufficient stock for ${item.products.name}`);
     }
   }
 
-  const orderItems = items.map((item) => {
-    const resolvedOriginalPrice = Number(item.products?.pricing?.originalPrice ?? item.products?.price ?? 0);
-    const resolvedUnitPrice = Number(item.products?.pricing?.priceToPay ?? item.products?.discount_price ?? item.products?.price ?? 0);
-    const promotion = item.products?.pricing?.promotion || null;
-    const promotionActive = Boolean(item.products?.pricing?.promotionActive);
-    const promotionDiscountPercentage = Number(item.products?.pricing?.discountPercentage || 0);
+  const productIds = [...new Set(items.map((item) => item.products?.id).filter(Boolean))];
+  const promotionMap = await getActivePromotionMapForProductIds(productIds);
 
-    const listPrice = resolvedOriginalPrice;
-    const unitSellingPrice = resolvedUnitPrice;
+  const orderItems = items.map((item) => {
+    const variation = item.product_variations || null;
+    const listPrice = Number(variation?.price || 0);
+    const variationSelling = resolveVariationUnitPrice(variation || {});
+    const promo = promotionMap.get(String(item.products?.id || ""));
+    const promoPct = promo ? Math.max(0, Math.min(100, Number(promo.discountPercentage || 0))) : 0;
+    const unitSellingPrice = promoPct > 0
+      ? Number(Math.max(0, listPrice - (listPrice * promoPct) / 100).toFixed(2))
+      : variationSelling;
     const unitDiscountAmount = Math.max(0, listPrice - unitSellingPrice);
-    const unitProductCost = Number(item.products.product_cost ?? 0);
+    const unitProductCost = Number(variation?.cost || 0);
     const unitShippingPrice = Number(item.products.shipping_price ?? 0);
     const quantity = Number(item.quantity || 0);
     const lineSubtotal = unitSellingPrice * quantity;
@@ -210,10 +229,16 @@ export const createOrder = asyncHandler(async (req, res) => {
       product_id: item.products.id,
       name: item.products.name,
       image:
+        variation?.image_url ||
         item.products.product_images
           ?.slice()
           .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))[0]?.image_url || "",
-      sku: item.products.sku || "",
+      sku: variation?.sku || "",
+      variation_id: variation?.id || null,
+      variation_name: resolveVariationName(variation || {}) || null,
+      variation_sku: variation?.sku || null,
+      variation_image: variation?.image_url || null,
+      variation_price: variation ? Number(variation.price || 0) : null,
       price: unitSellingPrice,
       list_price: listPrice,
       discount_amount: unitDiscountAmount,
@@ -226,13 +251,13 @@ export const createOrder = asyncHandler(async (req, res) => {
       line_product_cost_total: lineProductCostTotal,
       line_total: lineTotal,
       line_profit_total: lineProfitTotal,
-      promotion_id: promotion?.id || null,
-      promotion_title: promotion?.title || null,
-      promotion_slug: promotion?.slug || null,
-      promotion_discount_percentage: promotionActive ? promotionDiscountPercentage : 0,
-      promotion_original_price: promotionActive ? listPrice : null,
-      promotion_discounted_price: promotionActive ? unitSellingPrice : null,
-      promotion_active: promotionActive,
+      promotion_id: promo?.promotionId || null,
+      promotion_title: promo?.title || null,
+      promotion_slug: promo?.slug || null,
+      promotion_discount_percentage: promoPct,
+      promotion_original_price: promoPct > 0 ? listPrice : null,
+      promotion_discounted_price: promoPct > 0 ? unitSellingPrice : null,
+      promotion_active: promoPct > 0,
     };
   });
 
@@ -359,11 +384,19 @@ export const createOrder = asyncHandler(async (req, res) => {
   }
 
   for (const item of items) {
-    const nextStock = item.products.stock - item.quantity;
+    const variation = item.product_variations;
+    const currentStock = Number(variation?.stock || 0);
+    const nextStock = currentStock - Number(item.quantity || 0);
+
+    if (nextStock < 0) {
+      res.status(400);
+      throw new Error(`Insufficient stock for ${item.products?.name || "product"}`);
+    }
+
     const { error: stockError } = await supabase
-      .from("products")
+      .from("product_variations")
       .update({ stock: nextStock })
-      .eq("id", item.products.id);
+      .eq("id", variation.id);
 
     if (stockError) {
       res.status(500);

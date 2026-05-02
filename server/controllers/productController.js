@@ -1,8 +1,39 @@
 import asyncHandler from "express-async-handler";
 import crypto from "node:crypto";
 import supabase from "../config/supabase.js";
-import { attachPromotionPricingToProductRows } from "../services/promotionPricingService.js";
 import { mapProduct } from "../utils/dbMappers.js";
+import { getActivePromotionMapForProductIds } from "../services/promotionPricingService.js";
+
+const attachPromotionToProduct = (product, entry) => {
+  if (!product) return product;
+  if (!entry || !Number.isFinite(Number(entry.discountPercentage)) || Number(entry.discountPercentage) <= 0) {
+    return { ...product, promotion: null, promotionActive: false, promotionDiscountPercentage: 0 };
+  }
+  return {
+    ...product,
+    promotion: {
+      id: entry.promotionId,
+      title: entry.title,
+      slug: entry.slug,
+      discountPercentage: Number(entry.discountPercentage),
+      startDate: entry.startDate || null,
+      endDate: entry.endDate || null,
+    },
+    promotionActive: true,
+    promotionDiscountPercentage: Number(entry.discountPercentage),
+  };
+};
+
+const enrichProductsWithPromotions = async (products) => {
+  if (!Array.isArray(products) || !products.length) return products || [];
+  try {
+    const ids = products.map((p) => p.id || p._id).filter(Boolean);
+    const map = await getActivePromotionMapForProductIds(ids);
+    return products.map((p) => attachPromotionToProduct(p, map.get(String(p.id || p._id))));
+  } catch {
+    return products;
+  }
+};
 
 const MAX_PRODUCT_IMAGES = 6;
 const PRODUCT_IMAGES_BUCKET = process.env.PRODUCT_IMAGES_BUCKET || "product-images";
@@ -85,8 +116,127 @@ const refreshProductRating = async (productId) => {
   }
 };
 
-const productSelect =
-  "id, name, description, price, discount_price, product_cost, shipping_price, category, stock, rating, created_at, updated_at, product_images(image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at)";
+const isMissingVariationNameColumnError = (message = "") => {
+  const lowered = String(message || "").toLowerCase();
+  return (
+    lowered.includes("product_variations") &&
+    lowered.includes("column") &&
+    (lowered.includes(".name") || lowered.includes('"name"'))
+  );
+};
+
+const isMissingVariationSellingColumnError = (message = "") => {
+  const lowered = String(message || "").toLowerCase();
+  return (
+    lowered.includes("product_variations") &&
+    lowered.includes("column") &&
+    (lowered.includes("discounted_price") || lowered.includes("cost") || lowered.includes("stock"))
+  );
+};
+
+const productSelectV2 =
+  "id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, name, price, discounted_price, cost, stock, sku, image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at)";
+
+const productSelectV2LegacyVariations =
+  "id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, name, price, sku, image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at)";
+
+// Legacy compatibility: some databases used `variation_name` instead of `name`.
+const productSelectV1 =
+  "id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, variation_name, price, discounted_price, cost, stock, sku, image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at)";
+
+const productSelectV1LegacyVariations =
+  "id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, variation_name, price, sku, image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at)";
+
+const loadProductRowById = async (id) => {
+  const runSelect = async (selectClause) =>
+    supabase.from("products").select(selectClause).eq("id", id).maybeSingle();
+
+  let result = await runSelect(productSelectV2);
+
+  if (result.error && isMissingVariationSellingColumnError(result.error.message)) {
+    result = await runSelect(productSelectV2LegacyVariations);
+  }
+
+  if (result.error && isMissingVariationNameColumnError(result.error.message)) {
+    result = await runSelect(productSelectV1);
+  }
+
+  if (result.error && isMissingVariationSellingColumnError(result.error.message)) {
+    result = await runSelect(productSelectV1LegacyVariations);
+  }
+
+  const { data, error } = result;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+};
+
+const insertProductVariations = async ({ productId, variations }) => {
+  if (!variations.length) return;
+
+  const variationRowsV2 = variations.map((variation) => ({
+    product_id: productId,
+    name: variation.name,
+    price: variation.price,
+    discounted_price: variation.discountedPrice ?? null,
+    cost: variation.cost,
+    stock: variation.stock,
+    sku: variation.sku || null,
+    image_url: variation.imageUrl || null,
+    sort_order: Number.isFinite(variation.sortOrder) ? variation.sortOrder : 0,
+  }));
+
+  let { error } = await supabase.from("product_variations").insert(variationRowsV2);
+
+  if (error && isMissingVariationSellingColumnError(error.message)) {
+    const legacyRows = variations.map((variation) => ({
+      product_id: productId,
+      name: variation.name,
+      price: variation.price,
+      sku: variation.sku || null,
+      image_url: variation.imageUrl || null,
+      sort_order: Number.isFinite(variation.sortOrder) ? variation.sortOrder : 0,
+    }));
+
+    ({ error } = await supabase.from("product_variations").insert(legacyRows));
+  }
+
+  if (error && isMissingVariationNameColumnError(error.message)) {
+    const variationRowsV1 = variations.map((variation) => ({
+      product_id: productId,
+      variation_name: variation.name,
+      price: variation.price,
+      discounted_price: variation.discountedPrice ?? null,
+      cost: variation.cost,
+      stock: variation.stock,
+      sku: variation.sku || null,
+      image_url: variation.imageUrl || null,
+      sort_order: Number.isFinite(variation.sortOrder) ? variation.sortOrder : 0,
+    }));
+
+    ({ error } = await supabase.from("product_variations").insert(variationRowsV1));
+  }
+
+  if (error && isMissingVariationNameColumnError(error.message) && isMissingVariationSellingColumnError(error.message)) {
+    const legacyRows = variations.map((variation) => ({
+      product_id: productId,
+      variation_name: variation.name,
+      price: variation.price,
+      sku: variation.sku || null,
+      image_url: variation.imageUrl || null,
+      sort_order: Number.isFinite(variation.sortOrder) ? variation.sortOrder : 0,
+    }));
+
+    ({ error } = await supabase.from("product_variations").insert(legacyRows));
+  }
+
+  if (error) {
+    throw new Error(error.message);
+  }
+};
 
 export const getReviewEligibility = asyncHandler(async (req, res) => {
   const product = await ensureReviewProductExists(req.params.id);
@@ -139,44 +289,83 @@ export const getProducts = asyncHandler(async (req, res) => {
   const { category, q, sort } = req.query;
   const sortMap = {
     newest: { column: "created_at", ascending: false },
-    priceAsc: { column: "price", ascending: true },
-    priceDesc: { column: "price", ascending: false },
     rating: { column: "rating", ascending: false },
   };
 
-  let query = supabase.from("products").select(productSelect);
+  const getVariationUnitPrice = (variation = {}) => {
+    const price = Number(variation.price || 0);
+    const discounted = variation.discountedPrice == null ? null : Number(variation.discountedPrice);
+    if (Number.isFinite(discounted) && discounted > 0 && discounted < price) {
+      return discounted;
+    }
+    return price;
+  };
 
-  if (category) {
-    query = query.eq("category", category);
+  const getProductMinPrice = (product = {}) => {
+    const variations = Array.isArray(product.variations) ? product.variations : [];
+    if (!variations.length) return 0;
+    return variations.reduce((min, v) => Math.min(min, getVariationUnitPrice(v)), Infinity);
+  };
+
+  const buildQuery = (selectClause) => {
+    let query = supabase.from("products").select(selectClause);
+
+    if (category) {
+      query = query.eq("category", category);
+    }
+
+    if (q) {
+      query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`);
+    }
+
+    const sortConfig = sortMap[sort] || { column: "created_at", ascending: false };
+    query = query.order(sortConfig.column, { ascending: sortConfig.ascending });
+    return query;
+  };
+
+  let { data, error } = await buildQuery(productSelectV2);
+
+    if (error) {
+    if (isMissingVariationSellingColumnError(error.message)) {
+      ({ data, error } = await buildQuery(productSelectV2LegacyVariations));
+    }
   }
 
-  if (q) {
-    query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`);
-  }
+  if (error && isMissingVariationNameColumnError(error.message)) {
+    ({ data, error } = await buildQuery(productSelectV1));
+    }
 
-  const sortConfig = sortMap[sort] || { column: "created_at", ascending: false };
-  query = query.order(sortConfig.column, { ascending: sortConfig.ascending });
+  if (error && isMissingVariationSellingColumnError(error.message)) {
+      ({ data, error } = await buildQuery(productSelectV1LegacyVariations));
+    }
 
-  const { data, error } = await query;
   if (error) {
     res.status(500);
     throw new Error(error.message);
   }
 
-  const pricedRows = await attachPromotionPricingToProductRows(data || []);
-  res.json(pricedRows.map(mapProduct));
+  let products = (data || []).map(mapProduct);
+  products = await enrichProductsWithPromotions(products);
+
+  if (sort === "priceAsc") {
+    products = products.slice().sort((a, b) => getProductMinPrice(a) - getProductMinPrice(b));
+  } else if (sort === "priceDesc") {
+    products = products.slice().sort((a, b) => getProductMinPrice(b) - getProductMinPrice(a));
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("Products API result:", products);
+
+  res.json(products);
 });
 
 export const getProductById = asyncHandler(async (req, res) => {
-  const { data, error } = await supabase
-    .from("products")
-    .select(productSelect)
-    .eq("id", req.params.id)
-    .maybeSingle();
-
-  if (error) {
+  let data;
+  try {
+    data = await loadProductRowById(req.params.id);
+  } catch (err) {
     res.status(500);
-    throw new Error(error.message);
+    throw err;
   }
 
   if (!data) {
@@ -184,26 +373,23 @@ export const getProductById = asyncHandler(async (req, res) => {
     throw new Error("Product not found");
   }
 
-  const [pricedRow] = await attachPromotionPricingToProductRows([data]);
-  res.json(mapProduct(pricedRow || data));
+  const product = mapProduct(data);
+  const [enriched] = await enrichProductsWithPromotions([product]);
+  res.json(enriched);
 });
 
 export const createProduct = asyncHandler(async (req, res) => {
   const {
     name,
     description,
-    price,
-    discountPrice,
     category,
-    productCost = 0,
     shippingPrice = 0,
     images = [],
-    stock = 0,
     rating = 0,
-    sku = null,
     brand = "",
     featured = false,
     status = "active",
+    variations = [],
   } = req.body;
 
   if (!Array.isArray(images) || images.length < 1) {
@@ -216,22 +402,76 @@ export const createProduct = asyncHandler(async (req, res) => {
     throw new Error(`A product can have at most ${MAX_PRODUCT_IMAGES} images`);
   }
 
-  if (discountPrice != null && Number(discountPrice) > Number(price)) {
+  if (!Array.isArray(variations)) {
     res.status(400);
-    throw new Error("Discount price cannot be greater than price");
+    throw new Error("Variations must be an array");
+  }
+
+  if (!variations.length) {
+    res.status(400);
+    throw new Error("At least one variation is required");
+  }
+
+  const normalizedVariations = variations.map((variation, index) => ({
+    name: String(variation?.name || "").trim(),
+    price: Number(variation?.price),
+    discountedPrice:
+      variation?.discountedPrice == null || variation.discountedPrice === ""
+        ? null
+        : Number(variation.discountedPrice),
+    cost: Number(variation?.cost),
+    stock: Number.parseInt(variation?.stock, 10),
+    sku: variation?.sku ? String(variation.sku).trim() : "",
+    imageUrl: variation?.imageUrl ? String(variation.imageUrl).trim() : "",
+    sortOrder: Number.isFinite(Number(variation?.sortOrder)) ? Number(variation.sortOrder) : index,
+  }));
+
+  if (normalizedVariations.some((variation) => !variation.name)) {
+    res.status(400);
+    throw new Error("Variation name is required");
+  }
+
+  if (normalizedVariations.some((variation) => !Number.isFinite(variation.price) || variation.price < 0)) {
+    res.status(400);
+    throw new Error("Variation price is required");
+  }
+
+  if (normalizedVariations.some((variation) => !Number.isFinite(variation.cost) || variation.cost < 0)) {
+    res.status(400);
+    throw new Error("Variation cost is required");
+  }
+
+  if (normalizedVariations.some((variation) => !Number.isFinite(variation.stock) || variation.stock < 0)) {
+    res.status(400);
+    throw new Error("Variation stock is required");
+  }
+
+  if (
+    normalizedVariations.some((variation) => {
+      if (variation.discountedPrice == null) return false;
+      if (!Number.isFinite(variation.discountedPrice) || variation.discountedPrice < 0) return true;
+      return variation.discountedPrice > variation.price;
+    })
+  ) {
+    res.status(400);
+    throw new Error("Variation discounted price cannot be greater than variation price");
+  }
+
+  const variationSkus = normalizedVariations
+    .map((variation) => variation.sku)
+    .filter(Boolean);
+  const uniqueVariationSkus = new Set(variationSkus);
+  if (uniqueVariationSkus.size !== variationSkus.length) {
+    res.status(400);
+    throw new Error("Variation SKU values must be unique");
   }
 
   const insertPayload = {
     name,
     description,
-    price,
-    discount_price: discountPrice ?? null,
     category,
-    product_cost: Number(productCost || 0),
     shipping_price: Number(shippingPrice || 0),
-    stock,
     rating,
-    sku: sku || null,
     brand: brand || "",
     featured: Boolean(featured),
     status: status || "active",
@@ -249,12 +489,7 @@ export const createProduct = asyncHandler(async (req, res) => {
       .insert({
         name,
         description,
-        price,
-        discount_price: discountPrice ?? null,
         category,
-        product_cost: Number(productCost || 0),
-        shipping_price: Number(shippingPrice || 0),
-        stock,
         rating,
       })
       .select("id")
@@ -280,19 +515,27 @@ export const createProduct = asyncHandler(async (req, res) => {
     }
   }
 
-  const { data: fullProduct, error: loadError } = await supabase
-    .from("products")
-    .select(productSelect)
-    .eq("id", created.id)
-    .single();
-
-  if (loadError || !fullProduct) {
+  try {
+    await insertProductVariations({ productId: created.id, variations: normalizedVariations });
+  } catch (err) {
     res.status(500);
-    throw new Error(loadError?.message || "Failed to load created product");
+    throw err;
   }
 
-  const [pricedRow] = await attachPromotionPricingToProductRows([fullProduct]);
-  res.status(201).json(mapProduct(pricedRow || fullProduct));
+  let fullProduct;
+  try {
+    fullProduct = await loadProductRowById(created.id);
+  } catch (err) {
+    res.status(500);
+    throw err;
+  }
+
+  if (!fullProduct) {
+    res.status(500);
+    throw new Error("Failed to load created product");
+  }
+
+  res.status(201).json(mapProduct(fullProduct));
 });
 
 export const updateProduct = asyncHandler(async (req, res) => {
@@ -315,26 +558,73 @@ export const updateProduct = asyncHandler(async (req, res) => {
   const payload = {};
   if (req.body.name !== undefined) payload.name = req.body.name;
   if (req.body.description !== undefined) payload.description = req.body.description;
-  if (req.body.price !== undefined) payload.price = req.body.price;
-  if (req.body.discountPrice !== undefined) payload.discount_price = req.body.discountPrice;
   if (req.body.category !== undefined) payload.category = req.body.category;
-  if (req.body.productCost !== undefined) payload.product_cost = Number(req.body.productCost || 0);
   if (req.body.shippingPrice !== undefined) payload.shipping_price = Number(req.body.shippingPrice || 0);
-  if (req.body.stock !== undefined) payload.stock = req.body.stock;
   if (req.body.rating !== undefined) payload.rating = req.body.rating;
-  if (req.body.sku !== undefined) payload.sku = req.body.sku || null;
   if (req.body.brand !== undefined) payload.brand = req.body.brand || "";
   if (req.body.featured !== undefined) payload.featured = Boolean(req.body.featured);
   if (req.body.status !== undefined) payload.status = req.body.status;
 
-  if (
-    req.body.discountPrice !== undefined &&
-    req.body.price !== undefined &&
-    req.body.discountPrice != null &&
-    Number(req.body.discountPrice) > Number(req.body.price)
-  ) {
-    res.status(400);
-    throw new Error("Discount price cannot be greater than price");
+  let normalizedVariations = null;
+  if (Array.isArray(req.body.variations)) {
+    if (!req.body.variations.length) {
+      res.status(400);
+      throw new Error("At least one variation is required");
+    }
+
+    normalizedVariations = req.body.variations.map((variation, index) => ({
+      name: String(variation?.name || "").trim(),
+      price: Number(variation?.price),
+      discountedPrice:
+        variation?.discountedPrice == null || variation.discountedPrice === ""
+          ? null
+          : Number(variation.discountedPrice),
+      cost: Number(variation?.cost),
+      stock: Number.parseInt(variation?.stock, 10),
+      sku: variation?.sku ? String(variation.sku).trim() : "",
+      imageUrl: variation?.imageUrl ? String(variation.imageUrl).trim() : "",
+      sortOrder: Number.isFinite(Number(variation?.sortOrder)) ? Number(variation.sortOrder) : index,
+    }));
+
+    if (normalizedVariations.some((variation) => !variation.name)) {
+      res.status(400);
+      throw new Error("Variation name is required");
+    }
+
+    if (normalizedVariations.some((variation) => !Number.isFinite(variation.price) || variation.price < 0)) {
+      res.status(400);
+      throw new Error("Variation price is required");
+    }
+
+    if (normalizedVariations.some((variation) => !Number.isFinite(variation.cost) || variation.cost < 0)) {
+      res.status(400);
+      throw new Error("Variation cost is required");
+    }
+
+    if (normalizedVariations.some((variation) => !Number.isFinite(variation.stock) || variation.stock < 0)) {
+      res.status(400);
+      throw new Error("Variation stock is required");
+    }
+
+    if (
+      normalizedVariations.some((variation) => {
+        if (variation.discountedPrice == null) return false;
+        if (!Number.isFinite(variation.discountedPrice) || variation.discountedPrice < 0) return true;
+        return variation.discountedPrice > variation.price;
+      })
+    ) {
+      res.status(400);
+      throw new Error("Variation discounted price cannot be greater than variation price");
+    }
+
+    const variationSkus = normalizedVariations
+      .map((variation) => variation.sku)
+      .filter(Boolean);
+    const uniqueVariationSkus = new Set(variationSkus);
+    if (uniqueVariationSkus.size !== variationSkus.length) {
+      res.status(400);
+      throw new Error("Variation SKU values must be unique");
+    }
   }
 
   let { error: updateError } = await supabase
@@ -344,11 +634,9 @@ export const updateProduct = asyncHandler(async (req, res) => {
 
   if (updateError && isMissingColumnError(updateError.message)) {
     const fallbackPayload = { ...payload };
-    delete fallbackPayload.sku;
     delete fallbackPayload.brand;
     delete fallbackPayload.featured;
     delete fallbackPayload.status;
-    delete fallbackPayload.product_cost;
     delete fallbackPayload.shipping_price;
 
     ({ error: updateError } = await supabase
@@ -397,19 +685,39 @@ export const updateProduct = asyncHandler(async (req, res) => {
     }
   }
 
-  const { data: updated, error: loadError } = await supabase
-    .from("products")
-    .select(productSelect)
-    .eq("id", req.params.id)
-    .single();
+  if (normalizedVariations) {
+    const { error: deleteVariationsError } = await supabase
+      .from("product_variations")
+      .delete()
+      .eq("product_id", req.params.id);
 
-  if (loadError || !updated) {
-    res.status(500);
-    throw new Error(loadError?.message || "Failed to load updated product");
+    if (deleteVariationsError) {
+      res.status(500);
+      throw new Error(deleteVariationsError.message);
+    }
+
+    try {
+      await insertProductVariations({ productId: req.params.id, variations: normalizedVariations });
+    } catch (err) {
+      res.status(500);
+      throw err;
+    }
   }
 
-  const [pricedRow] = await attachPromotionPricingToProductRows([updated]);
-  res.json(mapProduct(pricedRow || updated));
+  let updated;
+  try {
+    updated = await loadProductRowById(req.params.id);
+  } catch (err) {
+    res.status(500);
+    throw err;
+  }
+
+  if (!updated) {
+    res.status(500);
+    throw new Error("Failed to load updated product");
+  }
+
+  res.json(mapProduct(updated));
 });
 
 export const deleteProduct = asyncHandler(async (req, res) => {

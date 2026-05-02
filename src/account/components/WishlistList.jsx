@@ -1,4 +1,5 @@
 import EmptyState from "./EmptyState";
+import { getProductPricing } from "../../utils/pricing";
 
 function WishlistList({ items = [], onRemove, onMoveToCart }) {
   if (!items.length) {
@@ -13,7 +14,7 @@ function WishlistList({ items = [], onRemove, onMoveToCart }) {
             <img src={item.images?.[0] || item.image} alt={item.name} className="h-16 w-16 rounded-lg object-cover" />
             <div>
               <p className="font-semibold text-ink">{item.name}</p>
-              <p className="text-sm text-muted">Rs. {Number(item.discountPrice || item.price || 0).toFixed(2)}</p>
+              <p className="text-sm text-muted">Rs. {Number(getProductPricing(item).finalPrice || 0).toFixed(2)}</p>
             </div>
           </div>
 

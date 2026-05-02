@@ -294,6 +294,140 @@ create trigger trg_enforce_product_images_limit
 before insert or update on public.product_images
 for each row execute function public.enforce_product_images_limit();
 
+-- Product variations
+create table if not exists public.product_variations (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.products(id) on delete cascade,
+  name text not null,
+  price numeric(12,2) not null check (price >= 0),
+  discounted_price numeric(12,2) check (discounted_price is null or (discounted_price >= 0 and discounted_price <= price)),
+  cost numeric(12,2) not null default 0 check (cost >= 0),
+  stock integer not null default 0 check (stock >= 0),
+  sku text,
+  image_url text,
+  sort_order integer not null default 0 check (sort_order >= 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Backward-compatibility: older installs may have used `variation_name` instead of `name`.
+alter table public.product_variations add column if not exists name text;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'product_variations'
+      and column_name = 'variation_name'
+  ) then
+    update public.product_variations
+      set name = variation_name
+      where name is null;
+
+    if not exists (
+      select 1
+      from public.product_variations
+      where name is null
+    ) then
+      alter table public.product_variations alter column name set not null;
+    end if;
+  end if;
+end;
+$$;
+
+alter table public.product_variations add column if not exists sku text;
+alter table public.product_variations add column if not exists image_url text;
+alter table public.product_variations add column if not exists sort_order integer;
+alter table public.product_variations add column if not exists discounted_price numeric(12,2);
+alter table public.product_variations add column if not exists cost numeric(12,2);
+alter table public.product_variations add column if not exists stock integer;
+
+update public.product_variations set cost = 0 where cost is null;
+update public.product_variations set stock = 0 where stock is null;
+
+alter table public.product_variations alter column cost set default 0;
+alter table public.product_variations alter column cost set not null;
+alter table public.product_variations alter column stock set default 0;
+alter table public.product_variations alter column stock set not null;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'product_variations_discounted_price_check'
+  ) then
+    alter table public.product_variations
+      add constraint product_variations_discounted_price_check
+      check (discounted_price is null or (discounted_price >= 0 and discounted_price <= price));
+  end if;
+end;
+$$;
+update public.product_variations set sort_order = 0 where sort_order is null;
+alter table public.product_variations alter column sort_order set default 0;
+alter table public.product_variations alter column sort_order set not null;
+
+-- Backfill: create a default variation for legacy products that have no variations yet,
+-- copying selling fields (price, discount_price, product_cost, stock, sku) from products.
+do $$
+declare
+  has_legacy_price boolean;
+  has_legacy_discount boolean;
+  has_legacy_cost boolean;
+  has_legacy_stock boolean;
+  has_legacy_sku boolean;
+  sql_text text;
+begin
+  select exists(
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products' and column_name = 'price'
+  ) into has_legacy_price;
+
+  select exists(
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products' and column_name = 'discount_price'
+  ) into has_legacy_discount;
+
+  select exists(
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products' and column_name = 'product_cost'
+  ) into has_legacy_cost;
+
+  select exists(
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products' and column_name = 'stock'
+  ) into has_legacy_stock;
+
+  select exists(
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products' and column_name = 'sku'
+  ) into has_legacy_sku;
+
+  sql_text :=
+    'insert into public.product_variations (product_id, name, price, discounted_price, cost, stock, sku, sort_order) ' ||
+    'select p.id, ''Default'', ' ||
+      case when has_legacy_price then 'coalesce(p.price, 0)' else '0' end || ', ' ||
+      case when has_legacy_discount then 'p.discount_price' else 'null::numeric' end || ', ' ||
+      case when has_legacy_cost then 'coalesce(p.product_cost, 0)' else '0' end || ', ' ||
+      case when has_legacy_stock then 'coalesce(p.stock, 0)' else '0' end || ', ' ||
+      case when has_legacy_sku then 'p.sku' else 'null::text' end || ', 0 ' ||
+    'from public.products p ' ||
+    'where not exists (select 1 from public.product_variations v where v.product_id = p.id)';
+
+  execute sql_text;
+end;
+$$;
+
+create index if not exists idx_product_variations_product on public.product_variations(product_id);
+create unique index if not exists idx_product_variations_sku_unique on public.product_variations(sku) where sku is not null;
+
+drop trigger if exists trg_product_variations_updated_at on public.product_variations;
+create trigger trg_product_variations_updated_at
+before update on public.product_variations
+for each row execute function public.set_updated_at();
+
 -- Product reviews (Mongo embedded reviews[])
 create table if not exists public.product_reviews (
   id uuid primary key default gen_random_uuid(),
@@ -357,13 +491,18 @@ before update on public.carts
 for each row execute function public.set_updated_at();
 
 create table if not exists public.cart_items (
+  id uuid primary key default gen_random_uuid(),
   cart_id uuid not null references public.carts(id) on delete cascade,
   product_id uuid not null references public.products(id) on delete cascade,
+  variation_id uuid references public.product_variations(id) on delete set null,
   quantity integer not null default 1 check (quantity >= 1),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  primary key (cart_id, product_id)
+  updated_at timestamptz not null default now()
 );
+
+alter table public.cart_items add column if not exists variation_id uuid;
+create index if not exists idx_cart_items_variation on public.cart_items(variation_id);
+create unique index if not exists idx_cart_items_unique_variant on public.cart_items(cart_id, product_id, variation_id);
 
 drop trigger if exists trg_cart_items_updated_at on public.cart_items;
 create trigger trg_cart_items_updated_at
@@ -525,6 +664,11 @@ create table if not exists public.order_items (
   name text not null,
   image text not null,
   sku text,
+  variation_id uuid references public.product_variations(id) on delete set null,
+  variation_name text,
+  variation_sku text,
+  variation_image text,
+  variation_price numeric(12,2),
   price numeric(12,2) not null check (price >= 0),
   list_price numeric(12,2) not null default 0 check (list_price >= 0),
   discount_amount numeric(12,2) not null default 0 check (discount_amount >= 0),
@@ -542,6 +686,11 @@ create table if not exists public.order_items (
 
 alter table public.order_items add column if not exists list_price numeric(12,2);
 alter table public.order_items add column if not exists sku text;
+alter table public.order_items add column if not exists variation_id uuid;
+alter table public.order_items add column if not exists variation_name text;
+alter table public.order_items add column if not exists variation_sku text;
+alter table public.order_items add column if not exists variation_image text;
+alter table public.order_items add column if not exists variation_price numeric(12,2);
 alter table public.order_items add column if not exists discount_amount numeric(12,2);
 alter table public.order_items add column if not exists product_cost numeric(12,2);
 alter table public.order_items add column if not exists shipping_price numeric(12,2);

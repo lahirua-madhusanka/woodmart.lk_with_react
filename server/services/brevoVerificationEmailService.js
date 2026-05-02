@@ -1,6 +1,12 @@
 import env from "../config/env.js";
+import { isSmtpConfigured, sendSmtpEmail } from "../utils/email.js";
 
 const BREVO_SEND_URL = "https://api.brevo.com/v3/smtp/email";
+
+const isRestApiKey = (key) => {
+  const value = String(key || "").trim();
+  return value.startsWith("xkeysib-");
+};
 
 const buildVerificationEmailHtml = ({ name, verificationUrl, expiresInHours }) => {
   const safeName = String(name || "there");
@@ -38,10 +44,37 @@ const logBrevo = (event, payload = {}) => {
 };
 
 export const sendVerificationEmail = async ({ toEmail, name, verificationUrl, expiresInHours = 1 }) => {
-  if (!env.brevoApiKey) {
-    const error = new Error("Brevo API key is not configured");
-    error.statusCode = 502;
-    throw error;
+  const subject = "Verify your email";
+  const htmlContent = buildVerificationEmailHtml({ name, verificationUrl, expiresInHours });
+
+  // If the configured Brevo key is not a v3 REST key (e.g. xsmtpsib-...),
+  // skip the API call and use SMTP directly. The REST endpoint only accepts
+  // xkeysib-... keys.
+  if (!isRestApiKey(env.brevoApiKey)) {
+    if (!isSmtpConfigured()) {
+      const error = new Error(
+        "Email is not configured: provide a Brevo v3 REST API key (xkeysib-...) or SMTP credentials"
+      );
+      error.statusCode = 502;
+      throw error;
+    }
+
+    logBrevo("smtp_fallback_attempt", { toEmail, reason: env.brevoApiKey ? "non_rest_key" : "missing_key" });
+    try {
+      const result = await sendSmtpEmail({ toEmail, toName: name, subject, htmlContent });
+      logBrevo("smtp_fallback_success", { toEmail, messageId: result?.messageId || null });
+      return { messageId: result?.messageId || null, transport: "smtp" };
+    } catch (smtpError) {
+      logBrevo("smtp_fallback_failed", {
+        toEmail,
+        message: smtpError?.message || "Unknown error",
+        code: smtpError?.code || null,
+        response: smtpError?.response || null,
+      });
+      const error = new Error("Failed to send verification email via SMTP");
+      error.statusCode = 502;
+      throw error;
+    }
   }
 
   const senderEmail = env.brevoSenderEmail || env.smtpFrom || env.smtpUser;
@@ -62,18 +95,11 @@ export const sendVerificationEmail = async ({ toEmail, name, verificationUrl, ex
         name: String(name || "").trim() || undefined,
       },
     ],
-    subject: "Verify your email",
-    htmlContent: buildVerificationEmailHtml({
-      name,
-      verificationUrl,
-      expiresInHours,
-    }),
+    subject,
+    htmlContent,
   };
 
-  logBrevo("send_attempt", {
-    toEmail,
-    provider: "brevo_api",
-  });
+  logBrevo("send_attempt", { toEmail, provider: "brevo_api" });
 
   const response = await fetch(BREVO_SEND_URL, {
     method: "POST",
@@ -99,6 +125,21 @@ export const sendVerificationEmail = async ({ toEmail, name, verificationUrl, ex
       status: response.status,
       body: parsed || responseText || null,
     });
+
+    if (isSmtpConfigured()) {
+      logBrevo("smtp_fallback_attempt", { toEmail, reason: `rest_status_${response.status}` });
+      try {
+        const result = await sendSmtpEmail({ toEmail, toName: name, subject, htmlContent });
+        logBrevo("smtp_fallback_success", { toEmail, messageId: result?.messageId || null });
+        return { messageId: result?.messageId || null, transport: "smtp" };
+      } catch (smtpError) {
+        logBrevo("smtp_fallback_failed", {
+          toEmail,
+          message: smtpError?.message || "Unknown error",
+          code: smtpError?.code || null,
+        });
+      }
+    }
 
     const error = new Error("Failed to send verification email");
     error.statusCode = response.status >= 500 ? 502 : response.status;

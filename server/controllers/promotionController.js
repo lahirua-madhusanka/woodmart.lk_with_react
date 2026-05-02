@@ -85,15 +85,67 @@ const buildPromotionPayload = (body = {}) => {
   };
 };
 
-const promotionProductSelect =
-  "id, product_id, discount_percentage, products(id, name, description, price, discount_price, product_cost, shipping_price, category, stock, rating, sku, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at))";
+const promotionProductSelectV2 =
+  "id, product_id, discount_percentage, products(id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, name, price, discounted_price, cost, stock, sku, image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at))";
+const promotionProductSelectV2NoSelling =
+  "id, product_id, discount_percentage, products(id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, name, price, sku, image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at))";
+const promotionProductSelectV1 =
+  "id, product_id, discount_percentage, products(id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, variation_name, price, discounted_price, cost, stock, sku, image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at))";
+const promotionProductSelectV1NoSelling =
+  "id, product_id, discount_percentage, products(id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, variation_name, price, sku, image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at))";
+
+const isMissingVariationNameCol = (msg = "") => {
+  const m = String(msg).toLowerCase();
+  return m.includes("product_variations") && m.includes("column") && (m.includes(".name") || m.includes('"name"'));
+};
+const isMissingVariationSellingCol = (msg = "") => {
+  const m = String(msg).toLowerCase();
+  return m.includes("product_variations") && m.includes("column") && (m.includes("discounted_price") || m.includes("cost") || m.includes("stock"));
+};
+
+const getVariationUnitPrice = (variation = {}) => {
+  const price = Number(variation.price || 0);
+  const discounted =
+    variation.discountedPrice == null
+      ? variation.discounted_price == null
+        ? null
+        : Number(variation.discounted_price)
+      : Number(variation.discountedPrice);
+  if (Number.isFinite(discounted) && discounted > 0 && discounted < price) {
+    return discounted;
+  }
+  return price;
+};
+
+const getProductBasePrice = (product = {}) => {
+  const variations = Array.isArray(product.variations) ? product.variations : [];
+  if (!variations.length) return 0;
+  const min = variations.reduce((acc, variation) => {
+    const value = getVariationUnitPrice(variation);
+    if (!Number.isFinite(value) || value <= 0) return acc;
+    return acc == null ? value : Math.min(acc, value);
+  }, null);
+  return min == null ? 0 : min;
+};
 
 const getPromotionProducts = async (promotionId) => {
-  const { data, error } = await supabase
-    .from("promotion_products")
-    .select(promotionProductSelect)
-    .eq("promotion_id", promotionId)
-    .order("created_at", { ascending: false });
+  const runSelect = (selectClause) =>
+    supabase
+      .from("promotion_products")
+      .select(selectClause)
+      .eq("promotion_id", promotionId)
+      .order("created_at", { ascending: false });
+
+  let { data, error } = await runSelect(promotionProductSelectV2);
+  if (error && isMissingVariationSellingCol(error.message)) {
+    ({ data, error } = await runSelect(promotionProductSelectV2NoSelling));
+  }
+  if (error && isMissingVariationNameCol(error.message)) {
+    ({ data, error } = await runSelect(promotionProductSelectV1));
+  }
+  if (error && isMissingVariationSellingCol(error.message)) {
+    ({ data, error } = await runSelect(promotionProductSelectV1NoSelling));
+  }
 
   if (error) {
     throw new Error(error.message);
@@ -101,7 +153,7 @@ const getPromotionProducts = async (promotionId) => {
 
   return (data || []).map((entry) => {
     const product = entry.products ? mapProduct(entry.products) : null;
-    const originalPrice = Number(product?.price || 0);
+    const originalPrice = product ? getProductBasePrice(product) : 0;
     const discountPercentage = Number(entry.discount_percentage || 0);
     const discountedPrice = Number(
       Math.max(0, originalPrice - (originalPrice * discountPercentage) / 100).toFixed(2)

@@ -6,16 +6,22 @@ const defaultForm = {
   name: "",
   description: "",
   category: "",
-  price: "",
-  discountPrice: "",
-  productCost: "",
-  shippingPrice: "",
-  stock: "",
-  sku: "",
   brand: "",
-  featured: false,
   status: "active",
 };
+
+const createEmptyVariation = () => ({
+  id: "",
+  name: "",
+  price: "",
+  discountedPrice: "",
+  cost: "",
+  stock: "",
+  sku: "",
+  imageUrl: "",
+  imageFile: null,
+  previewUrl: "",
+});
 
 function ProductForm({
   initialValues,
@@ -29,7 +35,10 @@ function ProductForm({
   const [existingImages, setExistingImages] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [imageError, setImageError] = useState("");
+  const [variations, setVariations] = useState([]);
+  const [variationError, setVariationError] = useState("");
   const selectedFilesRef = useRef([]);
+  const variationFilesRef = useRef([]);
 
   const clearSelectedFiles = () => {
     selectedFilesRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
@@ -41,21 +50,33 @@ function ProductForm({
     const next = {
       ...defaultForm,
       ...initialValues,
-      price: initialValues?.price ?? "",
-      discountPrice: initialValues?.discountPrice ?? "",
-      productCost: initialValues?.productCost ?? "",
-      shippingPrice: initialValues?.shippingPrice ?? "",
-      stock: initialValues?.stock ?? initialValues?.countInStock ?? "",
-      sku: initialValues?.sku ?? "",
       brand: initialValues?.brand ?? "",
-      featured: Boolean(initialValues?.featured),
       status: initialValues?.status || "active",
     };
 
     setFormState(next);
     setExistingImages(Array.isArray(initialValues?.images) ? initialValues.images : []);
+    setVariations(
+      Array.isArray(initialValues?.variations)
+        ? initialValues.variations.map((variation) => ({
+            ...createEmptyVariation(),
+            id: variation.id || "",
+            name: variation.name || variation.variation_name || "",
+            price: variation.price == null ? "" : String(variation.price),
+            discountedPrice:
+              (variation.discountedPrice ?? variation.discounted_price) == null
+                ? ""
+                : String(variation.discountedPrice ?? variation.discounted_price),
+            cost: variation.cost == null ? "" : String(variation.cost),
+            stock: variation.stock == null ? "" : String(variation.stock),
+            sku: variation.sku || "",
+            imageUrl: variation.imageUrl || "",
+          }))
+        : []
+    );
     clearSelectedFiles();
     setImageError("");
+    setVariationError("");
   }, [initialValues]);
 
   useEffect(() => {
@@ -63,8 +84,17 @@ function ProductForm({
   }, [selectedFiles]);
 
   useEffect(() => {
+    variationFilesRef.current = variations;
+  }, [variations]);
+
+  useEffect(() => {
     return () => {
       clearSelectedFiles();
+      variationFilesRef.current.forEach((variation) => {
+        if (variation?.previewUrl) {
+          URL.revokeObjectURL(variation.previewUrl);
+        }
+      });
     };
   }, []);
 
@@ -125,31 +155,55 @@ function ProductForm({
     });
   };
 
+  const addVariation = () => {
+    setVariations((prev) => [...prev, createEmptyVariation()]);
+  };
+
+  const updateVariation = (index, field, value) => {
+    setVariations((prev) =>
+      prev.map((variation, idx) => (idx === index ? { ...variation, [field]: value } : variation))
+    );
+  };
+
+  const handleVariationImage = (index, file) => {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setVariationError("Only image files are allowed for variations.");
+      return;
+    }
+
+    setVariations((prev) =>
+      prev.map((variation, idx) => {
+        if (idx !== index) return variation;
+        if (variation.previewUrl) {
+          URL.revokeObjectURL(variation.previewUrl);
+        }
+        return {
+          ...variation,
+          imageFile: file,
+          previewUrl: URL.createObjectURL(file),
+        };
+      })
+    );
+    setVariationError("");
+  };
+
+  const removeVariation = (index) => {
+    setVariations((prev) => {
+      const target = prev[index];
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter((_, idx) => idx !== index);
+    });
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
 
     if (!formState.name.trim()) {
       setImageError("Product name is required.");
-      return;
-    }
-
-    if (formState.price === "" || Number(formState.price) < 0) {
-      setImageError("Price is required.");
-      return;
-    }
-
-    if (formState.stock === "" || Number(formState.stock) < 0) {
-      setImageError("Stock is required.");
-      return;
-    }
-
-    if (formState.productCost === "" || Number(formState.productCost) < 0) {
-      setImageError("Product cost must be a non-negative value.");
-      return;
-    }
-
-    if (formState.shippingPrice === "" || Number(formState.shippingPrice) < 0) {
-      setImageError("Shipping price must be a non-negative value.");
       return;
     }
 
@@ -163,32 +217,93 @@ function ProductForm({
       return;
     }
 
-    if (
-      formState.discountPrice !== "" &&
-      Number(formState.discountPrice) > Number(formState.price)
-    ) {
-      setImageError("Discount price cannot be greater than price.");
+    if (!variations.length) {
+      setVariationError("At least one variation is required.");
+      return;
+    }
+
+    const invalidName = variations.some((variation) => !String(variation.name || "").trim());
+    if (invalidName) {
+      setVariationError("Variation name is required.");
+      return;
+    }
+
+    const invalidPrice = variations.some((variation) => {
+      const parsed = Number(variation.price);
+      return !Number.isFinite(parsed) || parsed < 0;
+    });
+
+    if (invalidPrice) {
+      setVariationError("Variation price is required.");
+      return;
+    }
+
+    const invalidStock = variations.some((variation) => {
+      const parsed = Number(variation.stock);
+      return !Number.isFinite(parsed) || parsed < 0;
+    });
+
+    if (invalidStock) {
+      setVariationError("Variation stock is required.");
+      return;
+    }
+
+    const invalidCost = variations.some((variation) => {
+      const parsed = Number(variation.cost);
+      return !Number.isFinite(parsed) || parsed < 0;
+    });
+
+    if (invalidCost) {
+      setVariationError("Variation cost is required.");
+      return;
+    }
+
+    const invalidDiscount = variations.some((variation) => {
+      if (variation.discountedPrice === "" || variation.discountedPrice == null) return false;
+      const discounted = Number(variation.discountedPrice);
+      const price = Number(variation.price);
+      return !Number.isFinite(discounted) || discounted < 0 || discounted > price;
+    });
+
+    if (invalidDiscount) {
+      setVariationError("Variation discount must be less than or equal to price.");
+      return;
+    }
+
+    const skuValues = variations
+      .map((variation) => String(variation.sku || "").trim())
+      .filter(Boolean);
+    const uniqueSkus = new Set(skuValues);
+    if (uniqueSkus.size !== skuValues.length) {
+      setVariationError("Variation SKU values must be unique.");
       return;
     }
 
     setImageError("");
+    setVariationError("");
 
     onSubmit({
       name: formState.name.trim(),
       description: formState.description.trim(),
       category: formState.category.trim(),
-      price: Number(formState.price),
-      discountPrice:
-        formState.discountPrice === "" ? null : Number(formState.discountPrice),
-      productCost: Number(formState.productCost),
-      shippingPrice: Number(formState.shippingPrice),
-      stock: Number(formState.stock),
-      sku: formState.sku.trim() || null,
       brand: formState.brand.trim(),
-      featured: Boolean(formState.featured),
       status: formState.status,
       existingImages,
       imageFiles: selectedFiles.map((item) => item.file),
+      variations: variations.map((variation) => ({
+        id: variation.id,
+        name: String(variation.name || "").trim(),
+        price: Number(variation.price),
+        discountedPrice:
+          variation.discountedPrice === "" || variation.discountedPrice == null
+            ? null
+            : Number(variation.discountedPrice),
+        cost: Number(variation.cost),
+        stock: Number(variation.stock),
+        sku: String(variation.sku || "").trim() || null,
+        imageUrl: variation.imageUrl || "",
+        imageFile: variation.imageFile || null,
+      })),
     });
   };
 
@@ -238,84 +353,6 @@ function ProductForm({
         </label>
 
         <label className="text-sm text-muted">
-          Price
-          <input
-            name="price"
-            type="number"
-            min="0"
-            step="0.01"
-            value={formState.price}
-            onChange={handleInputChange}
-            required
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-
-        <label className="text-sm text-muted">
-          Discount Price
-          <input
-            name="discountPrice"
-            type="number"
-            min="0"
-            step="0.01"
-            value={formState.discountPrice}
-            onChange={handleInputChange}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-
-        <label className="text-sm text-muted">
-          Product Cost
-          <input
-            name="productCost"
-            type="number"
-            min="0"
-            step="0.01"
-            value={formState.productCost}
-            onChange={handleInputChange}
-            required
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-
-        <label className="text-sm text-muted">
-          Shipping Price
-          <input
-            name="shippingPrice"
-            type="number"
-            min="0"
-            step="0.01"
-            value={formState.shippingPrice}
-            onChange={handleInputChange}
-            required
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-
-        <label className="text-sm text-muted">
-          Stock Quantity
-          <input
-            name="stock"
-            type="number"
-            min="0"
-            value={formState.stock}
-            onChange={handleInputChange}
-            required
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-
-        <label className="text-sm text-muted">
-          SKU
-          <input
-            name="sku"
-            value={formState.sku}
-            onChange={handleInputChange}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-
-        <label className="text-sm text-muted">
           Brand
           <input
             name="brand"
@@ -339,17 +376,6 @@ function ProductForm({
           </select>
         </label>
       </div>
-
-      <label className="mt-4 inline-flex items-center gap-2 text-sm text-muted">
-        <input
-          name="featured"
-          type="checkbox"
-          checked={Boolean(formState.featured)}
-          onChange={handleInputChange}
-          className="h-4 w-4 rounded border-slate-300"
-        />
-        Featured product
-      </label>
 
       <div className="mt-6 rounded-xl border border-slate-200 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -408,6 +434,126 @@ function ProductForm({
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-slate-200 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-ink">Variations</h3>
+            <p className="text-xs text-muted">Add size/type options with optional images.</p>
+          </div>
+          <button
+            type="button"
+            onClick={addVariation}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+          >
+            Add variation
+          </button>
+        </div>
+
+        {variationError ? <p className="mt-3 text-sm font-medium text-red-600">{variationError}</p> : null}
+
+        {!variations.length ? (
+          <p className="mt-3 text-sm text-muted">No variations added yet.</p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {variations.map((variation, index) => (
+              <div key={`variation-${index}`} className="grid gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_0.8fr_0.8fr_1fr_auto]">
+                <label className="text-sm text-muted">
+                  Name
+                  <input
+                    value={variation.name}
+                    onChange={(event) => updateVariation(index, "name", event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Large / Walnut"
+                  />
+                </label>
+
+                <label className="text-sm text-muted">
+                  Price
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={variation.price}
+                    onChange={(event) => updateVariation(index, "price", event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+
+                <label className="text-sm text-muted">
+                  Discount Price
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={variation.discountedPrice}
+                    onChange={(event) => updateVariation(index, "discountedPrice", event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+
+                <label className="text-sm text-muted">
+                  Cost
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={variation.cost}
+                    onChange={(event) => updateVariation(index, "cost", event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+
+                <label className="text-sm text-muted">
+                  Stock
+                  <input
+                    type="number"
+                    min="0"
+                    value={variation.stock}
+                    onChange={(event) => updateVariation(index, "stock", event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+
+                <label className="text-sm text-muted">
+                  SKU
+                  <input
+                    value={variation.sku}
+                    onChange={(event) => updateVariation(index, "sku", event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Optional"
+                  />
+                </label>
+
+                <label className="text-sm text-muted">
+                  Image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => handleVariationImage(index, event.target.files?.[0])}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                  {(variation.previewUrl || variation.imageUrl) && (
+                    <img
+                      src={variation.previewUrl || variation.imageUrl}
+                      alt={variation.name || `Variation ${index + 1}`}
+                      className="mt-2 h-16 w-16 rounded-lg border border-slate-200 object-cover"
+                    />
+                  )}
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => removeVariation(index)}
+                  className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mt-6 flex justify-end gap-3">

@@ -548,14 +548,18 @@ function CheckoutInner({ stripeEnabled }) {
 
           <div className="mt-4 space-y-3">
             {cartDetailedItems.map((item) => {
-              const unitPrice = Number(item.unitPrice ?? item.discountPrice ?? item.price ?? 0);
-              const listPrice = Number(item.listPrice ?? item.price ?? unitPrice);
+              const unitPrice = Number(item.unitPrice ?? 0);
+              const listPrice = Number(item.listPrice ?? unitPrice);
               const unitDiscount = Number(item.unitDiscountAmount || 0);
               const unitShipping = Number(item.unitShippingPrice || 0);
               const discountPercentage = Number(item.discountPercentage || 0);
               return (
                 <article key={item.productId} className="flex gap-3 border-b border-slate-100 pb-3">
-                  <img src={item.images?.[0] || item.image} alt={item.name} className="h-14 w-14 rounded-lg object-cover" />
+                  <img
+                    src={item.variation?.imageUrl || item.images?.[0] || item.image}
+                    alt={item.name}
+                    className="h-14 w-14 rounded-lg object-cover"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm font-semibold text-ink">{item.name}</p>
                     <p className="text-xs text-muted">Qty: {item.quantity}</p>

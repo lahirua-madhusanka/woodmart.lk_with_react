@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ShoppingCart, Sparkles } from "lucide-react";
 import StarRatingDisplay from "../components/common/StarRatingDisplay";
 import { useStorefrontSettings } from "../context/StorefrontSettingsContext";
@@ -10,6 +10,7 @@ import { getPromotionsApi } from "../services/promotionService";
 function PromotionsPage() {
   const { addToCart } = useStore();
   const { formatMoney } = useStorefrontSettings();
+  const navigate = useNavigate();
   const [promotions, setPromotions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -82,7 +83,7 @@ function PromotionsPage() {
               </div>
 
               {Array.isArray(promotion.products) && promotion.products.length > 0 ? (
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
                   {promotion.products.map((item) => {
                     const product = item.product;
                     if (!product) return null;
@@ -126,7 +127,14 @@ function PromotionsPage() {
 
                           <button
                             type="button"
-                            onClick={() => addToCart(product._id || product.id, 1)}
+                            onClick={() => {
+                              const productId = product._id || product.id;
+                              if (product?.variations?.length) {
+                                navigate(`/product/${productId}`);
+                                return;
+                              }
+                              addToCart(productId, 1);
+                            }}
                             className="btn-primary w-full justify-center gap-2 py-2.5"
                           >
                             <ShoppingCart size={15} /> Add to Cart

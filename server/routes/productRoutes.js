@@ -69,6 +69,11 @@ router.post(
       .optional()
       .isIn(["draft", "active", "archived"])
       .withMessage("Invalid status"),
+    body("variations").optional().isArray().withMessage("Variations must be an array"),
+    body("variations.*.name").optional({ nullable: true }).isString(),
+    body("variations.*.price").optional({ nullable: true }).isFloat({ min: 0 }).withMessage("Variation price must be positive"),
+    body("variations.*.sku").optional({ nullable: true }).isString(),
+    body("variations.*.imageUrl").optional({ nullable: true }).isString(),
   ],
   validateRequest,
   createProduct

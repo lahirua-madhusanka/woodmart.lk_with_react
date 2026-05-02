@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { useAuth } from "./AuthContext";
-import { getProductPricing } from "../utils/pricing";
+import { getProductPricing, getVariationPricing } from "../utils/pricing";
 import {
   addToCartApi,
   getCartApi,
@@ -21,20 +21,16 @@ const StoreContext = createContext(null);
 export function StoreProvider({ children }) {
   const { isAuthenticated } = useAuth();
   const [products, setProducts] = useState([]);
-  const [cartItems, setCartItems] = useState({});
+  const [cartItems, setCartItems] = useState([]);
   const [wishlist, setWishlist] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   const getProductId = useCallback((product) => String(product._id || product.id), []);
 
-  const cartFromApi = useCallback((cartResponse) => {
-    const next = {};
-    for (const item of cartResponse.items || []) {
-      next[String(item.productId)] = item.quantity;
-    }
-    return next;
-  }, []);
+  const cartFromApi = useCallback((cartResponse) =>
+    Array.isArray(cartResponse?.items) ? cartResponse.items : [],
+  []);
 
   const wishlistFromApi = useCallback(
     (wishlistResponse) =>
@@ -61,7 +57,7 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     const syncUserCollections = async () => {
       if (!isAuthenticated) {
-        setCartItems({});
+        setCartItems([]);
         setWishlist([]);
         return;
       }
@@ -81,16 +77,24 @@ export function StoreProvider({ children }) {
     syncUserCollections();
   }, [cartFromApi, isAuthenticated, wishlistFromApi]);
 
-  const addToCart = async (productId, quantity = 1) => {
+  const addToCart = async (productId, quantity = 1, variation = null) => {
     const key = String(productId);
+    const product = products.find((item) => getProductId(item) === key);
+    const hasVariations = Boolean(product?.variations?.length);
+    const variationId = variation?.id || null;
 
     if (!isAuthenticated) {
       toast.info("Please sign in to add products to cart");
       return;
     }
 
+    if (hasVariations && !variationId) {
+      toast.info("Please select a variation before adding to cart");
+      return;
+    }
+
     try {
-      const cart = await addToCartApi({ productId: key, quantity });
+      const cart = await addToCartApi({ productId: key, quantity, variationId });
       setCartItems(cartFromApi(cart));
       toast.success("Added to cart");
     } catch (error) {
@@ -98,7 +102,7 @@ export function StoreProvider({ children }) {
     }
   };
 
-  const updateCartItem = async (productId, quantity) => {
+  const updateCartItem = async (productId, variationId, quantity) => {
     const key = String(productId);
 
     if (!isAuthenticated) {
@@ -106,21 +110,21 @@ export function StoreProvider({ children }) {
     }
 
     try {
-      const cart = await updateCartApi({ productId: key, quantity });
+      const cart = await updateCartApi({ productId: key, variationId: variationId || null, quantity });
       setCartItems(cartFromApi(cart));
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
   };
 
-  const removeFromCart = async (productId) => {
+  const removeFromCart = async (productId, variationId) => {
     const key = String(productId);
     if (!isAuthenticated) {
       return;
     }
 
     try {
-      const cart = await removeCartApi({ productId: key });
+      const cart = await removeCartApi({ productId: key, variationId: variationId || null });
       setCartItems(cartFromApi(cart));
       toast.info("Item removed");
     } catch (error) {
@@ -154,22 +158,27 @@ export function StoreProvider({ children }) {
 
   const cartDetailedItems = useMemo(
     () =>
-      Object.entries(cartItems)
-        .map(([id, quantity]) => {
-          const product = products.find((item) => getProductId(item) === String(id));
+      cartItems
+        .map((entry) => {
+          const product = products.find((item) => getProductId(item) === String(entry.productId));
           if (!product) return null;
-          const pricing = getProductPricing(product);
+          const variation = entry.variation || null;
+          const pricing = variation ? getVariationPricing(variation, { product }) : getProductPricing(product);
           const listPrice = Number(pricing.originalPrice || 0);
           const unitPrice = Number(pricing.finalPrice || listPrice || 0);
           const unitDiscountAmount = Math.max(0, listPrice - unitPrice);
           const unitShippingPrice = Number(product.shippingPrice || 0);
-          const quantityValue = Number(quantity || 0);
+          const quantityValue = Number(entry.quantity || 0);
           return {
             ...product,
             productId: getProductId(product),
+            variationId: entry.variationId || null,
+            variation,
             quantity: quantityValue,
             listPrice,
             unitPrice,
+            variationPrice: listPrice,
+            finalPrice: unitPrice,
             unitDiscountAmount,
             unitShippingPrice,
             discountPercentage: Number(pricing.discountPercentage || 0),
@@ -186,7 +195,7 @@ export function StoreProvider({ children }) {
   );
 
   const cartCount = useMemo(
-    () => Object.values(cartItems).reduce((sum, value) => sum + value, 0),
+    () => cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
     [cartItems]
   );
 

@@ -300,10 +300,48 @@ export const getProfile = asyncHandler(async (req, res) => {
     throw new Error("User not found");
   }
 
-  const { data: wishlistRows, error: wishlistError } = await supabase
-    .from("user_wishlist")
-    .select("product_id, products(id, name, description, price, discount_price, category, stock, rating, created_at, updated_at, product_images(image_url, sort_order))")
-    .eq("user_id", req.user._id);
+  const wishlistSelectV2 =
+    "product_id, products(id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, name, price, discounted_price, cost, stock, sku, image_url, sort_order))";
+  const wishlistSelectV2NoSelling =
+    "product_id, products(id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, name, price, sku, image_url, sort_order))";
+  const wishlistSelectV1 =
+    "product_id, products(id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, variation_name, price, discounted_price, cost, stock, sku, image_url, sort_order))";
+  const wishlistSelectV1NoSelling =
+    "product_id, products(id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, variation_name, price, sku, image_url, sort_order))";
+  const wishlistSelectMinimal =
+    "product_id, products(id, name, description, category, rating, created_at, updated_at, product_images(image_url, sort_order))";
+
+  const isMissingVariationName = (msg = "") => {
+    const m = String(msg).toLowerCase();
+    return m.includes("product_variations") && m.includes("column") && (m.includes(".name") || m.includes('"name"'));
+  };
+  const isMissingVariationSelling = (msg = "") => {
+    const m = String(msg).toLowerCase();
+    return m.includes("product_variations") && m.includes("column") && (m.includes("discounted_price") || m.includes("cost") || m.includes("stock"));
+  };
+  const isMissingProductCol = (msg = "") => {
+    const m = String(msg).toLowerCase();
+    return m.includes("column") && (m.includes("brand") || m.includes("featured") || m.includes("status") || m.includes("shipping_price"));
+  };
+
+  const runWishlist = (selectClause) =>
+    supabase.from("user_wishlist").select(selectClause).eq("user_id", req.user._id);
+
+  let wishlistResult = await runWishlist(wishlistSelectV2);
+  if (wishlistResult.error && isMissingVariationSelling(wishlistResult.error.message)) {
+    wishlistResult = await runWishlist(wishlistSelectV2NoSelling);
+  }
+  if (wishlistResult.error && isMissingVariationName(wishlistResult.error.message)) {
+    wishlistResult = await runWishlist(wishlistSelectV1);
+  }
+  if (wishlistResult.error && isMissingVariationSelling(wishlistResult.error.message)) {
+    wishlistResult = await runWishlist(wishlistSelectV1NoSelling);
+  }
+  if (wishlistResult.error && isMissingProductCol(wishlistResult.error.message)) {
+    wishlistResult = await runWishlist(wishlistSelectMinimal);
+  }
+
+  const { data: wishlistRows, error: wishlistError } = wishlistResult;
 
   if (wishlistError) {
     res.status(500);

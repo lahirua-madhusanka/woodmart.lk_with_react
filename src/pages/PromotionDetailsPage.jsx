@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ShoppingCart } from "lucide-react";
 import StarRatingDisplay from "../components/common/StarRatingDisplay";
 import { useStorefrontSettings } from "../context/StorefrontSettingsContext";
@@ -11,6 +11,7 @@ function PromotionDetailsPage() {
   const { slug } = useParams();
   const { addToCart } = useStore();
   const { formatMoney } = useStorefrontSettings();
+  const navigate = useNavigate();
   const [promotion, setPromotion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -78,7 +79,7 @@ function PromotionDetailsPage() {
       {products.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-muted">No products assigned to this promotion yet.</div>
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
           {products.map((item) => {
             const product = item.product;
             if (!product) return null;
@@ -111,7 +112,18 @@ function PromotionDetailsPage() {
                     <span className="text-sm text-muted line-through">{formatMoney(item.originalPrice)}</span>
                   </div>
 
-                  <button type="button" onClick={() => addToCart(product._id || product.id, 1)} className="btn-primary w-full justify-center gap-2 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const productId = product._id || product.id;
+                      if (product?.variations?.length) {
+                        navigate(`/product/${productId}`);
+                        return;
+                      }
+                      addToCart(productId, 1);
+                    }}
+                    className="btn-primary w-full justify-center gap-2 py-2.5"
+                  >
                     <ShoppingCart size={15} /> Add to Cart
                   </button>
                 </div>

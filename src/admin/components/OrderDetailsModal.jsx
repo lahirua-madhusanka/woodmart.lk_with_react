@@ -633,6 +633,8 @@ function OrderDetailsModal({ order, open, onClose, onOrderUpdated, loading = fal
                 <div>
                   <p class="item-name">${item.name}</p>
                   <p class="item-sku">SKU: ${item.sku || "-"}</p>
+                  ${item.variationName ? `<p class="item-sku">Variation: ${item.variationName}</p>` : ""}
+                  ${item.variationSku ? `<p class="item-sku">Variation SKU: ${item.variationSku}</p>` : ""}
                 </div>
               </div>
             </td>
@@ -779,11 +781,17 @@ function OrderDetailsModal({ order, open, onClose, onOrderUpdated, loading = fal
                 <h4 className="text-sm font-semibold uppercase tracking-wide text-muted">Items</h4>
                 <div className="mt-3 space-y-3">
                   {items.map((item) => (
-                    <article key={`${item.productId}-${item.name}`} className="grid gap-3 rounded-lg border border-slate-100 p-3 sm:grid-cols-[64px_1fr_auto]">
+                    <article key={`${item.productId}-${item.variationId || "base"}`} className="grid gap-3 rounded-lg border border-slate-100 p-3 sm:grid-cols-[64px_1fr_auto]">
                       <img src={item.image} alt={item.name} className="h-16 w-16 rounded-md object-cover" />
                       <div className="text-sm">
                         <p className="font-semibold text-ink">{item.name}</p>
                         <p className="text-xs text-muted">SKU: {item.sku || "-"}</p>
+                        {item.variationName ? (
+                          <p className="text-xs text-muted">Variation: {item.variationName}</p>
+                        ) : null}
+                        {item.variationSku ? (
+                          <p className="text-xs text-muted">Variation SKU: {item.variationSku}</p>
+                        ) : null}
                         <p className="text-xs text-muted">Qty: {item.quantity}</p>
                         <p className="text-xs text-muted">Unit: {formatMoney(item.price)} | Discount: {formatMoney(item.discountAmount)} | Shipping: {formatMoney(item.shippingPrice)}</p>
                       </div>

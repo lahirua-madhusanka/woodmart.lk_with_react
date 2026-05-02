@@ -13,10 +13,13 @@ function CartList({ items = [], onQuantityChange, onRemove, onCheckout }) {
         <article key={item.productId || item._id || item.id} className="rounded-xl border border-slate-200 p-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <img src={item.images?.[0] || item.image} alt={item.name} className="h-16 w-16 rounded-lg object-cover" />
+              <img src={item.variation?.imageUrl || item.images?.[0] || item.image} alt={item.name} className="h-16 w-16 rounded-lg object-cover" />
               <div>
                 <p className="font-semibold text-ink">{item.name}</p>
-                <p className="text-sm text-muted">Rs. {Number(item.discountPrice || item.price || 0).toFixed(2)}</p>
+                {item.variation?.name ? (
+                  <p className="text-xs text-muted">Variation: {item.variation.name}</p>
+                ) : null}
+                <p className="text-sm text-muted">Rs. {Number(item.unitPrice || 0).toFixed(2)}</p>
               </div>
             </div>
 

@@ -4,6 +4,7 @@ import PrivateRoute from "./components/auth/PrivateRoute";
 import PageFallbackLoader from "./components/common/PageFallbackLoader";
 import MainLayout from "./components/layout/MainLayout";
 import AdminProtectedRoute from "./admin/routes/AdminProtectedRoute";
+import ScrollToTop from "./components/common/ScrollToTop";
 
 // Route-level splitting keeps the initial storefront payload small.
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -87,7 +88,9 @@ function App() {
   }, [location.search, navigate]);
 
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       <Route path="/admin/login" element={withSuspense(<AdminLoginPage />, "Loading admin login...")} />
       <Route
         path="/admin"
@@ -220,7 +223,8 @@ function App() {
         <Route path="verify-email" element={withSuspense(<VerifyEmailPage />, "Verifying email...")} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-    </Routes>
+      </Routes>
+    </>
   );
 }
 

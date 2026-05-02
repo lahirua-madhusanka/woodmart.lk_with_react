@@ -16,6 +16,22 @@ export const mapProduct = (row) => {
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
     .map((entry) => entry.image_url);
 
+  const variations = (row.product_variations || [])
+    .slice()
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+    .map((entry) => ({
+      id: entry.id,
+      name: entry.name ?? entry.variation_name ?? "",
+      price: Number(entry.price || 0),
+      discountedPrice:
+        entry.discounted_price == null ? null : Number(entry.discounted_price),
+      cost: Number(entry.cost || 0),
+      stock: Number(entry.stock || 0),
+      sku: entry.sku || "",
+      imageUrl: entry.image_url || "",
+      sortOrder: Number(entry.sort_order || 0),
+    }));
+
   const reviews = (row.product_reviews || []).map((review) => ({
     _id: review.id,
     user: review.user_id,
@@ -29,43 +45,20 @@ export const mapProduct = (row) => {
     updatedAt: review.updated_at,
   }));
 
-  const pricing = row.pricing || {};
-  const originalPrice = Number(pricing.originalPrice ?? row.price ?? 0);
-  const discountedPrice = Number(pricing.discountedPrice ?? row.discount_price ?? row.price ?? 0);
-  const priceToPay = Number(pricing.priceToPay ?? discountedPrice ?? originalPrice);
-  const promotionActive = Boolean(pricing.promotionActive);
-  const discountPercentage = Number(pricing.discountPercentage || 0);
-  const promotion = pricing.promotion || null;
-  const effectiveDiscountPrice =
-    Number.isFinite(discountedPrice) && discountedPrice > 0 && discountedPrice < originalPrice
-      ? discountedPrice
-      : null;
-
   return {
     _id: row.id,
     id: row.id,
     name: row.name,
     description: row.description,
-    price: Number(row.price || 0),
-    discountPrice: effectiveDiscountPrice,
-    originalPrice,
-    discountedPrice: priceToPay,
-    discountPercentage,
-    promotionActive,
-    promotion,
-    pricingSource: pricing.pricingSource || "regular",
-    productCost: Number(row.product_cost || 0),
-    shippingPrice: Number(row.shipping_price || 0),
     category: row.category,
-    sku: row.sku || "",
     brand: row.brand || "",
-    featured: Boolean(row.featured),
     status: row.status || "active",
+    featured: Boolean(row.featured),
+    shippingPrice: row.shipping_price == null ? 0 : Number(row.shipping_price),
+    rating: row.rating == null ? 0 : Number(row.rating),
     image: images[0] || "",
     images,
-    stock: row.stock,
-    countInStock: row.stock,
-    rating: Number(row.rating || 0),
+    variations,
     reviews,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -83,6 +76,11 @@ export const mapOrder = (row, options = {}) => {
     name: item.name,
     image: item.image,
     sku: item.sku || "",
+    variationId: item.variation_id || null,
+    variationName: item.variation_name || "",
+    variationSku: item.variation_sku || "",
+    variationImage: item.variation_image || "",
+    variationPrice: item.variation_price == null ? null : Number(item.variation_price),
     price: Number(item.price || 0),
     listPrice: Number(item.list_price ?? item.price ?? 0),
     discountAmount: Number(item.discount_amount || 0),
@@ -200,8 +198,23 @@ export const mapCart = (cartRow, itemRows, productRows) => {
     userId: cartRow.user_id,
     items: itemRows.map((item) => {
       const product = productMap.get(item.product_id);
+      const variation = item.product_variations || null;
       return {
         productId: item.product_id,
+        variationId: item.variation_id || null,
+        variation: variation
+          ? {
+              id: variation.id,
+              name: variation.name ?? variation.variation_name ?? "",
+              price: Number(variation.price || 0),
+              discountedPrice:
+                variation.discounted_price == null ? null : Number(variation.discounted_price),
+              cost: Number(variation.cost || 0),
+              stock: Number(variation.stock || 0),
+              sku: variation.sku || "",
+              imageUrl: variation.image_url || "",
+            }
+          : null,
         product: product ? mapProduct(product) : null,
         quantity: item.quantity,
       };

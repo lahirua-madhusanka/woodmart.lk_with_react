@@ -55,12 +55,21 @@ function PromotionsPage() {
   const [savingProducts, setSavingProducts] = useState(false);
 
   const productOptions = useMemo(
-    () => (Array.isArray(products) ? products : []).map((product) => ({
-      id: product._id || product.id,
-      name: product.name,
-      price: Number(product.price || 0),
-      imageUrl: (Array.isArray(product.images) && product.images[0]) || product.image || "",
-    })),
+    () => (Array.isArray(products) ? products : []).map((product) => {
+      const variations = Array.isArray(product.variations) ? product.variations : [];
+      const minPrice = variations.length
+        ? variations.reduce((min, v) => {
+            const p = Number(v.price || 0);
+            return Number.isFinite(p) && p > 0 ? Math.min(min, p) : min;
+          }, Infinity)
+        : 0;
+      return {
+        id: product._id || product.id,
+        name: product.name,
+        price: Number.isFinite(minPrice) ? minPrice : 0,
+        imageUrl: (Array.isArray(product.images) && product.images[0]) || product.image || "",
+      };
+    }),
     [products]
   );
 

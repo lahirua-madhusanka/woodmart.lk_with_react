@@ -51,8 +51,16 @@ function OrderDetailsModal({ open, order, onClose }) {
             </thead>
             <tbody>
               {(order.items || []).map((item) => (
-                <tr key={item.productId} className="border-t border-slate-100">
-                  <td className="px-3 py-2">{item.name}</td>
+                <tr key={`${item.productId}-${item.variationId || "base"}`} className="border-t border-slate-100">
+                  <td className="px-3 py-2">
+                    <p className="font-semibold text-ink">{item.name}</p>
+                    {item.variationName ? (
+                      <p className="text-xs text-muted">Variation: {item.variationName}</p>
+                    ) : null}
+                    {item.variationSku ? (
+                      <p className="text-xs text-muted">SKU: {item.variationSku}</p>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2">{item.quantity}</td>
                   <td className="px-3 py-2">Rs. {Number(item.price).toFixed(2)}</td>
                   <td className="px-3 py-2">Rs. {Number(item.price * item.quantity).toFixed(2)}</td>

@@ -13,7 +13,7 @@ import {
   sendCustomProjectPurchaseLink,
   updateAdminCustomProjectRequest,
 } from "../controllers/customProjectController.js";
-import { adminOnly, optionalProtect, protect } from "../middleware/authMiddleware.js";
+import { adminOnly, protect } from "../middleware/authMiddleware.js";
 import { validateRequest } from "../middleware/validateMiddleware.js";
 
 const router = express.Router();
@@ -35,7 +35,7 @@ const upload = multer({
 
 router.post(
   "/",
-  optionalProtect,
+  protect,
   upload.array("images", MAX_CUSTOM_PROJECT_IMAGES),
   [
     body("description")

@@ -14,6 +14,7 @@ router.post(
   "/add",
   [
     body("productId").isUUID().withMessage("Valid productId is required"),
+    body("variationId").optional({ nullable: true }).isUUID().withMessage("Valid variationId is required"),
     body("quantity").optional().isInt({ min: 1 }).withMessage("Quantity must be at least 1"),
   ],
   validateRequest,
@@ -24,6 +25,7 @@ router.put(
   "/update",
   [
     body("productId").isUUID().withMessage("Valid productId is required"),
+    body("variationId").optional({ nullable: true }).isUUID().withMessage("Valid variationId is required"),
     body("quantity").isInt({ min: 0 }).withMessage("Quantity must be zero or greater"),
   ],
   validateRequest,
@@ -32,7 +34,10 @@ router.put(
 
 router.delete(
   "/remove",
-  [body("productId").isUUID().withMessage("Valid productId is required")],
+  [
+    body("productId").isUUID().withMessage("Valid productId is required"),
+    body("variationId").optional({ nullable: true }).isUUID().withMessage("Valid variationId is required"),
+  ],
   validateRequest,
   removeCartItem
 );

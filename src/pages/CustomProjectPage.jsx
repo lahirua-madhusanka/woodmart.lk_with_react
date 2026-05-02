@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { useAuth } from "../context/AuthContext";
@@ -18,12 +18,16 @@ const emptyForm = {
 
 const acceptedImageMimeTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const maxImages = 5;
+const CUSTOM_PROJECT_DRAFT_KEY = "customProjectDraft";
 
 function CustomProjectPage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
   const [images, setImages] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const isBlocked = !loading && !isAuthenticated;
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -32,11 +36,25 @@ function CustomProjectPage() {
 
     setForm((prev) => ({
       ...prev,
-      name: user.name || "",
-      email: user.email || "",
-      mobile: getUserPhone(user._id || user.id) || prev.mobile || "",
+      name: prev.name || user.name || "",
+      email: prev.email || user.email || "",
+      mobile: prev.mobile || getUserPhone(user._id || user.id) || "",
     }));
   }, [isAuthenticated, user]);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem(CUSTOM_PROJECT_DRAFT_KEY);
+    if (!saved) return;
+
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === "object") {
+        setForm((prev) => ({ ...prev, ...parsed }));
+      }
+    } catch {
+      // Ignore invalid draft data.
+    }
+  }, []);
 
   useEffect(
     () => () => {
@@ -114,6 +132,16 @@ function CustomProjectPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    if (!isAuthenticated) {
+      sessionStorage.setItem(CUSTOM_PROJECT_DRAFT_KEY, JSON.stringify(form));
+      if (images.length) {
+        toast.info("Please re-attach your images after signing in.");
+      }
+      navigate("/auth", { state: { from: location.pathname }, replace: true });
+      toast.error("Please sign in to submit a custom request");
+      return;
+    }
+
     if (!canSubmit) {
       toast.error("Please fill all required fields");
       return;
@@ -133,6 +161,7 @@ function CustomProjectPage() {
     try {
       await createCustomProjectRequestApi(payload);
       toast.success("Your custom project request has been submitted");
+      sessionStorage.removeItem(CUSTOM_PROJECT_DRAFT_KEY);
       resetForm();
     } catch (error) {
       toast.error(getApiErrorMessage(error));
@@ -156,6 +185,31 @@ function CustomProjectPage() {
             </Link>
           ) : null}
         </header>
+
+        {isBlocked ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
+            <p className="text-sm font-semibold">Please sign in to submit a custom request</p>
+            <p className="mt-2 text-sm text-amber-800">
+              Log in or create an account to upload reference images and send your requirements.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Link
+                to="/auth"
+                state={{ from: location.pathname }}
+                className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white"
+              >
+                Login
+              </Link>
+              <Link
+                to="/auth"
+                state={{ from: location.pathname }}
+                className="text-sm font-semibold text-brand hover:underline"
+              >
+                Create an account
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="grid gap-3">

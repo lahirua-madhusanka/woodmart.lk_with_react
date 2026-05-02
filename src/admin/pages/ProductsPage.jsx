@@ -16,6 +16,7 @@ import {
   getCategories,
   getProducts,
 } from "../services/productsService";
+import { getProductPricing } from "../../utils/pricing";
 
 function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -56,6 +57,10 @@ function ProductsPage() {
   }, [products, category, query]);
 
   const { page, totalPages, data, setPage } = usePagination(filtered, 8);
+
+  const getTotalStock = (product) =>
+    (Array.isArray(product?.variations) ? product.variations : [])
+      .reduce((sum, variation) => sum + Number(variation?.stock || 0), 0);
 
   const handleDelete = async () => {
     const targetId = deleteTarget?._id;
@@ -128,21 +133,33 @@ function ProductsPage() {
           {
             key: "price",
             title: "Price",
-            render: (row) => `Rs. ${Number(row.price || 0).toFixed(2)}`,
+            render: (row) => {
+              const pricing = getProductPricing(row);
+              return `Rs. ${Number(pricing.finalPrice || 0).toFixed(2)}`;
+            },
           },
           {
             key: "discountPrice",
             title: "Discount",
             render: (row) => {
-              const discountPrice = Number(row.discountPrice || 0);
-              if (!discountPrice) return "-";
-              return `Rs. ${discountPrice.toFixed(2)}`;
+              const pricing = getProductPricing(row);
+              if (!pricing.hasDiscount) return "-";
+              return `Rs. ${Number(pricing.finalPrice || 0).toFixed(2)}`;
             },
           },
           {
             key: "productCost",
             title: "Cost",
-            render: (row) => `Rs. ${Number(row.productCost || 0).toFixed(2)}`,
+            render: (row) => {
+              const variations = Array.isArray(row?.variations) ? row.variations : [];
+              if (!variations.length) return "-";
+              const minCost = variations.reduce((acc, variation) => {
+                const cost = Number(variation?.cost ?? 0);
+                if (!Number.isFinite(cost)) return acc;
+                return acc == null ? cost : Math.min(acc, cost);
+              }, null);
+              return minCost == null ? "-" : `Rs. ${minCost.toFixed(2)}`;
+            },
           },
           {
             key: "shippingPrice",
@@ -152,13 +169,13 @@ function ProductsPage() {
           {
             key: "stock",
             title: "Stock",
-            render: (row) => row.countInStock ?? row.stock ?? 0,
+            render: (row) => getTotalStock(row),
           },
           {
             key: "status",
             title: "Status",
             render: (row) => (
-              <StatusBadge value={(row.countInStock ?? row.stock ?? 0) <= 10 ? "low" : "active"} />
+              <StatusBadge value={getTotalStock(row) <= 10 ? "low" : "active"} />
             ),
           },
           {

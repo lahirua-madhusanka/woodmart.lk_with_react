@@ -1,6 +1,7 @@
 import { HeartOff, ShoppingBag } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStore } from "../context/StoreContext";
+import { getProductPricing } from "../utils/pricing";
 
 function WishlistPage() {
   const { getProductId, wishlistItems, toggleWishlist, moveWishlistToCart } = useStore();
@@ -22,7 +23,7 @@ function WishlistPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-brand">{item.category}</p>
                 <h2 className="text-lg font-semibold">{item.name}</h2>
-                <p className="mt-1 text-sm text-muted">Rs. {Number(item.discountPrice || item.price)}</p>
+                <p className="mt-1 text-sm text-muted">Rs. {Number(getProductPricing(item).finalPrice)}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     onClick={() => moveWishlistToCart(getProductId(item))}

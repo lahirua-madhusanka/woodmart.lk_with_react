@@ -64,6 +64,44 @@ function CustomRequestsPage() {
     purchaseLink: "",
     purchaseLinkMessage: "",
   });
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [imageErrors, setImageErrors] = useState({});
+
+  const imageItems = useMemo(() => {
+    if (!selectedRequest) return [];
+    if (Array.isArray(selectedRequest.images) && selectedRequest.images.length) {
+      return selectedRequest.images
+        .map((entry, index) => ({
+          id: entry.id || `${index}-${entry.url}`,
+          url: entry.url,
+        }))
+        .filter((entry) => Boolean(entry.url));
+    }
+    if (Array.isArray(selectedRequest.imageUrls) && selectedRequest.imageUrls.length) {
+      return selectedRequest.imageUrls
+        .map((url, index) => ({ id: `${index}-${url}`, url }))
+        .filter((entry) => Boolean(entry.url));
+    }
+    return [];
+  }, [selectedRequest]);
+
+  const openImageModal = (index) => {
+    setActiveImageIndex(index);
+    setIsImageModalOpen(true);
+  };
+
+  const closeImageModal = () => {
+    setIsImageModalOpen(false);
+  };
+
+  const showPrevImage = () => {
+    setActiveImageIndex((current) => (current - 1 + imageItems.length) % imageItems.length);
+  };
+
+  const showNextImage = () => {
+    setActiveImageIndex((current) => (current + 1) % imageItems.length);
+  };
 
   const loadRequests = async () => {
     setLoadingList(true);
@@ -114,6 +152,12 @@ function CustomRequestsPage() {
   useEffect(() => {
     loadRequestDetail(selectedId);
   }, [selectedId]);
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+    setIsImageModalOpen(false);
+    setImageErrors({});
+  }, [selectedRequest?.id]);
 
   const visibleRequests = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -275,6 +319,62 @@ function CustomRequestsPage() {
             </div>
           ) : (
             <div className="space-y-4 p-5">
+              {isImageModalOpen && imageItems.length ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4">
+                  <div className="relative w-full max-w-5xl rounded-2xl bg-white p-4 shadow-xl">
+                    <button
+                      type="button"
+                      onClick={closeImageModal}
+                      className="absolute right-4 top-4 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                      aria-label="Close image preview"
+                    >
+                      Close
+                    </button>
+                    <div className="flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={showPrevImage}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        disabled={imageItems.length < 2}
+                      >
+                        Prev
+                      </button>
+                      <div className="flex-1">
+                        <div className="flex h-[60vh] items-center justify-center rounded-xl bg-slate-50">
+                          {!imageItems[activeImageIndex] ? (
+                            <div className="text-sm text-muted">Image not available</div>
+                          ) : imageErrors[activeImageIndex] ? (
+                            <div className="text-sm text-rose-600">Image failed to load</div>
+                          ) : (
+                            <img
+                              src={imageItems[activeImageIndex].url}
+                              alt={`Custom request image ${activeImageIndex + 1}`}
+                              className="max-h-[60vh] w-auto max-w-full rounded-lg object-contain"
+                              onError={() =>
+                                setImageErrors((prev) => ({
+                                  ...prev,
+                                  [activeImageIndex]: true,
+                                }))
+                              }
+                            />
+                          )}
+                        </div>
+                        <p className="mt-3 text-center text-xs text-muted">
+                          {activeImageIndex + 1} of {imageItems.length}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={showNextImage}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        disabled={imageItems.length < 2}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               <div className="rounded-lg bg-slate-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex-1">
@@ -315,6 +415,52 @@ function CustomRequestsPage() {
                     <span className="font-semibold text-ink">Deadline:</span> {selectedRequest.deadline || "-"}
                   </p>
                 </div>
+              </article>
+
+              <article className="rounded-lg border border-slate-200 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-ink">Uploaded Images</h3>
+                  <span className="text-xs text-muted">{imageItems.length} total</span>
+                </div>
+                {!imageItems.length ? (
+                  <p className="mt-2 text-sm text-muted">No images uploaded for this request.</p>
+                ) : (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {imageItems.map((image, index) => (
+                      <button
+                        type="button"
+                        key={image.id}
+                        onClick={() => openImageModal(index)}
+                        className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left"
+                      >
+                        <div className="relative aspect-square">
+                          {imageErrors[index] ? (
+                            <div className="flex h-full items-center justify-center text-xs font-semibold text-rose-600">
+                              Image unavailable
+                            </div>
+                          ) : (
+                            <img
+                              src={image.url}
+                              alt={`Uploaded image ${index + 1}`}
+                              loading="lazy"
+                              className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                              onError={() =>
+                                setImageErrors((prev) => ({
+                                  ...prev,
+                                  [index]: true,
+                                }))
+                              }
+                            />
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between px-3 py-2 text-xs text-muted">
+                          <span>Image {index + 1}</span>
+                          <span className="text-brand">Preview</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </article>
 
               <article className="rounded-lg border border-slate-200 p-4">

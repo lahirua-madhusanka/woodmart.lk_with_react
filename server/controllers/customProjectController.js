@@ -132,6 +132,15 @@ const mapProject = (row = {}) => {
   const quoteExpired = isQuoteExpired(row);
   const purchaseExpired = isPurchaseWindowExpired(row);
   const purchaseDaysLeft = daysRemaining(row.purchase_deadline);
+  const images = (row.images || [])
+    .slice()
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+    .map((entry) => ({
+      id: entry.id,
+      url: entry.image_url,
+      sortOrder: Number(entry.sort_order || 0),
+      createdAt: entry.created_at,
+    }));
 
   return {
     id: row.id,
@@ -172,15 +181,8 @@ const mapProject = (row = {}) => {
       ["accepted", "link_sent"].includes(row.status || "")
         ? "You can buy this product within the next 10 days. We will send you the product link."
         : "",
-    images: (row.images || [])
-      .slice()
-      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-      .map((entry) => ({
-        id: entry.id,
-        url: entry.image_url,
-        sortOrder: Number(entry.sort_order || 0),
-        createdAt: entry.created_at,
-      })),
+    images,
+    imageUrls: images.map((entry) => entry.url).filter(Boolean),
     quoteHistory: (row.quoteHistory || [])
       .slice()
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -277,14 +279,19 @@ const uploadRequestImages = async (files = []) => {
 export const createCustomProjectRequest = asyncHandler(async (req, res) => {
   const files = req.files || [];
 
+  if (!req.user?.id) {
+    res.status(401);
+    throw new Error("Not authorized, token missing");
+  }
+
   if (files.length > MAX_CUSTOM_PROJECT_IMAGES) {
     res.status(400);
     throw new Error(`You can upload up to ${MAX_CUSTOM_PROJECT_IMAGES} images only`);
   }
 
   const description = String(req.body.description || "").trim();
-  const name = String(req.body.name || "").trim();
-  const email = String(req.body.email || "").trim().toLowerCase();
+  const name = String(req.user?.name || req.body.name || "").trim();
+  const email = String(req.user?.email || req.body.email || "").trim().toLowerCase();
   const mobile = String(req.body.mobile || "").trim();
   const specifications = String(req.body.specifications || "").trim();
   const budgetRaw = req.body.budget;
@@ -326,7 +333,7 @@ export const createCustomProjectRequest = asyncHandler(async (req, res) => {
   }
 
   const payload = {
-    user_id: req.user?.id || null,
+    user_id: req.user.id,
     name,
     email,
     mobile,

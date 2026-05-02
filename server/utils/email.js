@@ -31,6 +31,30 @@ const getTransporter = () => {
   return transporter;
 };
 
+const getFromAddress = () => {
+  const address = env.smtpFrom || env.smtpUser;
+  const name = (env.brevoSenderName || "Woodmart.lk").replace(/"/g, "");
+  return address ? `"${name}" <${address}>` : address;
+};
+
+export const sendSmtpEmail = async ({ toEmail, toName, subject, htmlContent }) => {
+  const mailer = getTransporter();
+  if (!mailer) {
+    const error = new Error("SMTP transport is not configured");
+    error.statusCode = 502;
+    throw error;
+  }
+
+  return mailer.sendMail({
+    from: getFromAddress(),
+    to: toName ? `"${String(toName).replace(/"/g, "")}" <${toEmail}>` : toEmail,
+    subject,
+    html: htmlContent,
+  });
+};
+
+export const isSmtpConfigured = () => hasSmtpConfig();
+
 const throwMissingSmtpError = (purpose) => {
   const error = new Error(`SMTP email is not configured for ${purpose}.`);
   error.statusCode = 502;
@@ -74,7 +98,7 @@ export const sendPasswordResetEmail = async ({ toEmail, name, resetUrl }) => {
 
   try {
     await mailer.sendMail({
-      from: env.smtpFrom || env.smtpUser,
+      from: getFromAddress(),
       to: toEmail,
       subject: "Reset your password",
       html: `
@@ -145,7 +169,7 @@ export const sendContactReplyEmail = async ({
     const safeReply = escapeHtml(replyMessage || "");
 
     await mailer.sendMail({
-      from: env.smtpFrom || env.smtpUser,
+      from: getFromAddress(),
       to: toEmail,
       subject: `Re: ${inquirySubject || "Inquiry"}`,
       html: `

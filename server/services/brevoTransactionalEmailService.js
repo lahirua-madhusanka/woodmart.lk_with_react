@@ -1,6 +1,9 @@
 import env from "../config/env.js";
+import { isSmtpConfigured, sendSmtpEmail } from "../utils/email.js";
 
 const BREVO_SEND_URL = "https://api.brevo.com/v3/smtp/email";
+
+const isRestApiKey = (key) => String(key || "").trim().startsWith("xkeysib-");
 
 const parseResponsePayload = async (response) => {
   const responseText = await response.text();
@@ -34,10 +37,63 @@ export const sendBrevoTransactionalEmail = async ({
   tag = "transactional",
   logContext = "brevo_transactional",
 }) => {
-  if (!env.brevoApiKey) {
-    const error = new Error("Brevo API key is not configured");
-    error.statusCode = 502;
-    throw error;
+  // Use SMTP fallback when the configured key is not a v3 REST key.
+  if (!isRestApiKey(env.brevoApiKey)) {
+    if (!isSmtpConfigured()) {
+      const error = new Error(
+        "Email is not configured: provide a Brevo v3 REST API key (xkeysib-...) or SMTP credentials"
+      );
+      error.statusCode = 502;
+      throw error;
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(
+      "[EMAIL_PROVIDER]",
+      JSON.stringify({
+        event: "smtp_fallback_attempt",
+        context: logContext,
+        toEmail,
+        tag,
+        reason: env.brevoApiKey ? "non_rest_key" : "missing_key",
+        timestamp: new Date().toISOString(),
+      })
+    );
+
+    try {
+      const result = await sendSmtpEmail({ toEmail, toName, subject, htmlContent });
+      // eslint-disable-next-line no-console
+      console.log(
+        "[EMAIL_PROVIDER]",
+        JSON.stringify({
+          event: "smtp_fallback_success",
+          context: logContext,
+          toEmail,
+          tag,
+          messageId: result?.messageId || null,
+          timestamp: new Date().toISOString(),
+        })
+      );
+      return { messageId: result?.messageId || null, transport: "smtp" };
+    } catch (smtpError) {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[EMAIL_PROVIDER]",
+        JSON.stringify({
+          event: "smtp_fallback_failed",
+          context: logContext,
+          toEmail,
+          tag,
+          message: smtpError?.message || "Unknown error",
+          code: smtpError?.code || null,
+          response: smtpError?.response || null,
+          timestamp: new Date().toISOString(),
+        })
+      );
+      const error = new Error("Failed to send transactional email via SMTP");
+      error.statusCode = 502;
+      throw error;
+    }
   }
 
   const sender = resolveSender();
@@ -93,6 +149,39 @@ export const sendBrevoTransactionalEmail = async ({
         timestamp: new Date().toISOString(),
       })
     );
+
+    if (isSmtpConfigured()) {
+      try {
+        const result = await sendSmtpEmail({ toEmail, toName, subject, htmlContent });
+        // eslint-disable-next-line no-console
+        console.log(
+          "[EMAIL_PROVIDER]",
+          JSON.stringify({
+            event: "smtp_fallback_success",
+            context: logContext,
+            toEmail,
+            tag,
+            messageId: result?.messageId || null,
+            timestamp: new Date().toISOString(),
+          })
+        );
+        return { messageId: result?.messageId || null, transport: "smtp" };
+      } catch (smtpError) {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[EMAIL_PROVIDER]",
+          JSON.stringify({
+            event: "smtp_fallback_failed",
+            context: logContext,
+            toEmail,
+            tag,
+            message: smtpError?.message || "Unknown error",
+            code: smtpError?.code || null,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
+    }
 
     const error = new Error("Failed to send transactional email");
     error.statusCode = response.status >= 500 ? 502 : response.status;

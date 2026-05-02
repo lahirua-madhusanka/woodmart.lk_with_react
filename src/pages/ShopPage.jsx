@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import ProductCard from "../components/products/ProductCard";
 import { useStore } from "../context/StoreContext";
 import { getProductsApi } from "../services/productService";
+import { getProductMinPrice } from "../utils/pricing";
 
 
 const TOP_SECTION_PRODUCT_COUNT = 4;
@@ -82,7 +83,7 @@ function ShopPage() {
 
     const data = catalog
       .filter((item) => (category === "All" ? true : item.category === category))
-      .filter((item) => Number(item.discountPrice || item.price) <= maxPrice)
+      .filter((item) => Number(getProductMinPrice(item)) <= maxPrice)
       .filter((item) => item.rating >= minRating)
       .filter((item) =>
         lowered
@@ -95,12 +96,12 @@ function ShopPage() {
 
     if (sortBy === "priceAsc") {
       return [...data].sort(
-        (a, b) => Number(a.discountPrice || a.price) - Number(b.discountPrice || b.price)
+        (a, b) => Number(getProductMinPrice(a)) - Number(getProductMinPrice(b))
       );
     }
     if (sortBy === "priceDesc") {
       return [...data].sort(
-        (a, b) => Number(b.discountPrice || b.price) - Number(a.discountPrice || a.price)
+        (a, b) => Number(getProductMinPrice(b)) - Number(getProductMinPrice(a))
       );
     }
     if (sortBy === "rating") return [...data].sort((a, b) => b.rating - a.rating);
@@ -231,7 +232,7 @@ function ShopPage() {
               No products found.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {topSectionProducts.map((product) => (
                 <ProductCard key={product._id || product.id} product={product} />
               ))}
@@ -241,7 +242,7 @@ function ShopPage() {
 
         {!loadingCatalog && filtered.length > 0 && remainingProducts.length > 0 ? (
           <div className="lg:col-span-2">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
               {remainingProducts.map((product) => (
                 <ProductCard key={product._id || product.id} product={product} />
               ))}

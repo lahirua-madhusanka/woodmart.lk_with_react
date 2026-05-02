@@ -131,7 +131,7 @@ function OrderConfirmationPage() {
 
         <div className="mt-6 space-y-3 rounded-xl border border-slate-200 p-4">
           {order.items.map((item) => (
-            <div key={item.productId} className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3 last:border-none last:pb-0">
+            <div key={`${item.productId}-${item.variationId || "base"}`} className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3 last:border-none last:pb-0">
               <div className="flex min-w-0 items-start gap-3">
                 <img
                   src={resolveItemImage(item)}
@@ -143,6 +143,12 @@ function OrderConfirmationPage() {
                 />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-ink">{item.name}</p>
+                  {item.variationName ? (
+                    <p className="text-xs text-muted">Variation: {item.variationName}</p>
+                  ) : null}
+                  {item.variationSku ? (
+                    <p className="text-xs text-muted">SKU: {item.variationSku}</p>
+                  ) : null}
                   <p className="text-xs text-muted">Qty: {Number(item.quantity || 0)}</p>
                   <p className="text-xs text-muted">Price: {formatMoney(Number(item.price || 0))}</p>
                   {Number(item.promotionDiscountPercentage || 0) > 0 ? (

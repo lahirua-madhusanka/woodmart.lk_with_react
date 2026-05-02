@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Heart, ShoppingCart } from "lucide-react";
 import StarRatingDisplay from "../common/StarRatingDisplay";
 import RoutePrefetchLink from "../common/RoutePrefetchLink";
+import { useNavigate } from "react-router-dom";
 import { usePrefetchOnHover, usePrefetchTrigger } from "../../hooks/usePrefetchOnHover";
 import { useStorefrontSettings } from "../../context/StorefrontSettingsContext";
 import { useStore } from "../../context/StoreContext";
@@ -11,6 +12,7 @@ import { getProductPricing } from "../../utils/pricing";
 function ProductCard({ product }) {
   const { addToCart, getProductId, toggleWishlist, wishlist } = useStore();
   const { formatMoney } = useStorefrontSettings();
+  const navigate = useNavigate();
   const [imageLoaded, setImageLoaded] = useState(false);
   const productId = getProductId(product);
   const inWishlist = wishlist.includes(productId);
@@ -73,11 +75,11 @@ function ProductCard({ product }) {
         </button>
       </div>
 
-      <div className="space-y-3 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand">
+      <div className="space-y-2 p-3 sm:space-y-3 sm:p-4">
+        <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-brand">
           {product.category}
         </p>
-        <RoutePrefetchLink to={`/product/${productId}`} routeKey="productDetails" className="line-clamp-2 text-lg font-semibold text-ink" {...detailsPrefetch}>
+        <RoutePrefetchLink to={`/product/${productId}`} routeKey="productDetails" className="line-clamp-2 text-sm sm:text-lg font-semibold text-ink" {...detailsPrefetch}>
           {product.name}
         </RoutePrefetchLink>
 
@@ -88,13 +90,13 @@ function ProductCard({ product }) {
           size={14}
         />
 
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-brand-dark">{formatMoney(price)}</span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-base sm:text-lg font-bold text-brand-dark">{formatMoney(price)}</span>
           {pricing.hasDiscount && (
-            <span className="text-sm text-muted line-through">{formatMoney(pricing.originalPrice)}</span>
+            <span className="text-xs sm:text-sm text-muted line-through">{formatMoney(pricing.originalPrice)}</span>
           )}
           {!pricing.hasDiscount && product.oldPrice && (
-            <span className="text-sm text-muted line-through">{formatMoney(product.oldPrice)}</span>
+            <span className="text-xs sm:text-sm text-muted line-through">{formatMoney(product.oldPrice)}</span>
           )}
         </div>
 
@@ -104,6 +106,10 @@ function ProductCard({ product }) {
             onFocus={prefetchCart}
             onClick={() => {
               prefetchCart();
+              if (product?.variations?.length) {
+                navigate(`/product/${productId}`);
+                return;
+              }
               addToCart(productId, 1);
             }}
             className="btn-primary w-full justify-center gap-2 py-2.5"

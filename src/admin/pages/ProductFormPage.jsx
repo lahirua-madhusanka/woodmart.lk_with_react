@@ -64,20 +64,40 @@ function ProductFormPage() {
         return;
       }
 
+      const variationFiles = (payload.variations || []).filter((variation) => variation.imageFile);
+      const uploadedVariationImages = [];
+      if (variationFiles.length) {
+        const batchSize = MAX_PRODUCT_IMAGES;
+        for (let index = 0; index < variationFiles.length; index += batchSize) {
+          const batch = variationFiles.slice(index, index + batchSize).map((variation) => variation.imageFile);
+          const uploaded = await uploadProductImages(batch);
+          uploadedVariationImages.push(...uploaded);
+        }
+      }
+
+      let variationUploadIndex = 0;
+      const finalVariations = (payload.variations || []).map((variation) => {
+        const uploadedImage = variation.imageFile ? uploadedVariationImages[variationUploadIndex++] : "";
+        return {
+          id: variation.id || undefined,
+          name: variation.name,
+          price: variation.price,
+          discountedPrice: variation.discountedPrice ?? null,
+          cost: variation.cost,
+          stock: variation.stock,
+          sku: variation.sku || null,
+          imageUrl: variation.imageUrl || uploadedImage || null,
+        };
+      });
+
       const requestPayload = {
         name: payload.name,
         description: payload.description,
         category: payload.category,
-        price: payload.price,
-        discountPrice: payload.discountPrice,
-        productCost: payload.productCost,
-        shippingPrice: payload.shippingPrice,
-        stock: payload.stock,
-        sku: payload.sku,
         brand: payload.brand,
-        featured: payload.featured,
         status: payload.status,
         images: finalImages,
+        variations: finalVariations,
       };
 
       if (isEdit) {

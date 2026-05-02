@@ -10,10 +10,74 @@ const STOREFRONT_ASSETS_BUCKET =
   process.env.STOREFRONT_ASSETS_BUCKET || "storefront-assets";
 
 const orderSelect =
-  "id, user_id, subtotal_amount, shipping_total, discount_total, product_cost_total, profit_total, total_amount, payment_status, order_status, payment_method, payment_intent_id, transaction_id, paid_amount, tracking_number, courier_name, admin_note, tracking_added_at, shipped_at, out_for_delivery_at, delivered_at, returned_at, cancelled_at, invoice_number, coupon_id, coupon_code, coupon_title, coupon_discount_type, coupon_discount_value, coupon_discount_amount, created_at, updated_at, users:user_id(id, name, email), order_items(product_id, name, image, sku, price, list_price, discount_amount, product_cost, shipping_price, quantity, line_subtotal, line_shipping_total, line_discount_total, line_product_cost_total, line_total, line_profit_total, promotion_id, promotion_title, promotion_slug, promotion_discount_percentage, promotion_original_price, promotion_discounted_price, promotion_active), order_shipping_addresses(full_name, line1, line2, city, state, postal_code, country, phone), order_status_history(id, order_status, note, changed_by, changed_at, users:changed_by(name, email))";
+  "id, user_id, subtotal_amount, shipping_total, discount_total, product_cost_total, profit_total, total_amount, payment_status, order_status, payment_method, payment_intent_id, transaction_id, paid_amount, tracking_number, courier_name, admin_note, tracking_added_at, shipped_at, out_for_delivery_at, delivered_at, returned_at, cancelled_at, invoice_number, coupon_id, coupon_code, coupon_title, coupon_discount_type, coupon_discount_value, coupon_discount_amount, created_at, updated_at, users:user_id(id, name, email), order_items(product_id, name, image, sku, variation_id, variation_name, variation_sku, variation_image, variation_price, price, list_price, discount_amount, product_cost, shipping_price, quantity, line_subtotal, line_shipping_total, line_discount_total, line_product_cost_total, line_total, line_profit_total, promotion_id, promotion_title, promotion_slug, promotion_discount_percentage, promotion_original_price, promotion_discounted_price, promotion_active), order_shipping_addresses(full_name, line1, line2, city, state, postal_code, country, phone), order_status_history(id, order_status, note, changed_by, changed_at, users:changed_by(name, email))";
 
-const productSelect =
-  "id, name, description, price, discount_price, product_cost, shipping_price, category, stock, rating, created_at, updated_at, product_images(image_url, sort_order), product_reviews(id, user_id, name, rating, comment, created_at, updated_at)";
+const productSelectV2 =
+  "id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, name, price, discounted_price, cost, stock, sku, image_url, sort_order), product_reviews(id, user_id, name, rating, comment, created_at, updated_at)";
+const productSelectV2NoSelling =
+  "id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, name, price, sku, image_url, sort_order), product_reviews(id, user_id, name, rating, comment, created_at, updated_at)";
+const productSelectV1 =
+  "id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, variation_name, price, discounted_price, cost, stock, sku, image_url, sort_order), product_reviews(id, user_id, name, rating, comment, created_at, updated_at)";
+const productSelectV1NoSelling =
+  "id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, variation_name, price, sku, image_url, sort_order), product_reviews(id, user_id, name, rating, comment, created_at, updated_at)";
+
+const isMissingVariationNameColumnError = (message = "") => {
+  const lowered = String(message || "").toLowerCase();
+  return (
+    lowered.includes("product_variations") &&
+    lowered.includes("column") &&
+    (lowered.includes(".name") || lowered.includes('"name"'))
+  );
+};
+const isMissingVariationSellingColumnError = (message = "") => {
+  const lowered = String(message || "").toLowerCase();
+  return (
+    lowered.includes("product_variations") &&
+    lowered.includes("column") &&
+    (lowered.includes("discounted_price") || lowered.includes("cost") || lowered.includes("stock"))
+  );
+};
+const isMissingProductColumnError = (message = "") => {
+  const lowered = String(message || "").toLowerCase();
+  return (
+    lowered.includes("column") &&
+    (lowered.includes("brand") || lowered.includes("featured") || lowered.includes("status") || lowered.includes("shipping_price"))
+  );
+};
+
+const runProductsSelectWithFallback = async (buildQuery) => {
+  let result = await buildQuery(productSelectV2);
+  if (result.error && isMissingVariationSellingColumnError(result.error.message)) {
+    result = await buildQuery(productSelectV2NoSelling);
+  }
+  if (result.error && isMissingVariationNameColumnError(result.error.message)) {
+    result = await buildQuery(productSelectV1);
+  }
+  if (result.error && isMissingVariationSellingColumnError(result.error.message)) {
+    result = await buildQuery(productSelectV1NoSelling);
+  }
+  if (result.error && isMissingProductColumnError(result.error.message)) {
+    const stripped = (clause) =>
+      clause
+        .replace(/, brand/g, "")
+        .replace(/, featured/g, "")
+        .replace(/, status/g, "")
+        .replace(/, shipping_price/g, "");
+    result = await buildQuery(stripped(productSelectV2));
+    if (result.error && isMissingVariationSellingColumnError(result.error.message)) {
+      result = await buildQuery(stripped(productSelectV2NoSelling));
+    }
+    if (result.error && isMissingVariationNameColumnError(result.error.message)) {
+      result = await buildQuery(stripped(productSelectV1));
+    }
+    if (result.error && isMissingVariationSellingColumnError(result.error.message)) {
+      result = await buildQuery(stripped(productSelectV1NoSelling));
+    }
+  }
+  return result;
+};
+
+const productSelect = productSelectV2;
 
 const settingsSelect = "*";
 
@@ -496,13 +560,21 @@ export const uploadAdminHeroImage = asyncHandler(async (req, res) => {
 });
 
 export const getAdminDashboardStats = asyncHandler(async (req, res) => {
+  const lowStockResPromise = runProductsSelectWithFallback((selectClause) =>
+    supabase
+      .from("products")
+      .select(selectClause)
+      .order("created_at", { ascending: false })
+      .limit(50)
+  );
+
   const [productsCount, ordersCount, usersCount, recentOrdersRes, lowStockRes, revenueOrdersRes] =
     await Promise.all([
       supabase.from("products").select("id", { count: "exact", head: true }),
       supabase.from("orders").select("id", { count: "exact", head: true }),
       supabase.from("users").select("id", { count: "exact", head: true }),
       supabase.from("orders").select(orderSelect).order("created_at", { ascending: false }).limit(5),
-      supabase.from("products").select(productSelect).lte("stock", 10).order("stock", { ascending: true }).limit(8),
+      lowStockResPromise,
       supabase.from("orders").select("total_amount, payment_status, order_status, created_at"),
     ]);
 
@@ -565,7 +637,18 @@ export const getAdminDashboardStats = asyncHandler(async (req, res) => {
     },
     monthlyRevenue,
     recentOrders: (recentOrdersRes.data || []).map((row) => mapOrder(row, { includeUser: true })),
-    lowStockProducts: (lowStockRes.data || []).map(mapProduct),
+    lowStockProducts: (lowStockRes.data || [])
+      .map(mapProduct)
+      .map((product) => {
+        const totalStock = (product.variations || []).reduce(
+          (sum, variation) => sum + Number(variation.stock || 0),
+          0
+        );
+        return { ...product, stock: totalStock };
+      })
+      .filter((product) => product.stock <= 10)
+      .sort((a, b) => a.stock - b.stock)
+      .slice(0, 8),
   });
 });
 

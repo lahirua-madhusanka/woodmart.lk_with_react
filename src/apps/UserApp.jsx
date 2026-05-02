@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import PrivateRoute from "../components/auth/PrivateRoute";
 import PageFallbackLoader from "../components/common/PageFallbackLoader";
+import ScrollToTop from "../components/common/ScrollToTop";
 import MainLayout from "../components/layout/MainLayout";
 
 const HomePage = lazy(() => import("../pages/HomePage"));
@@ -44,7 +45,9 @@ function LegacyPromotionSlugRedirect() {
 
 function UserApp() {
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       <Route path="/" element={<MainLayout />}>
         <Route index element={withSuspense(<HomePage />, "Loading home...")} />
         <Route path="shop" element={withSuspense(<ShopPage />, "Loading shop...")} />
@@ -148,7 +151,8 @@ function UserApp() {
         <Route path="verify-email" element={withSuspense(<VerifyEmailPage />, "Verifying email...")} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-    </Routes>
+      </Routes>
+    </>
   );
 }
 

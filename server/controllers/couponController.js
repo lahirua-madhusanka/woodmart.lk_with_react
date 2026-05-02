@@ -301,7 +301,7 @@ export const applyCouponForCheckout = asyncHandler(async (req, res) => {
 
   const { data: cartItems, error: itemsError } = await supabase
     .from("cart_items")
-    .select("quantity, products(id, category, price, discount_price, shipping_price)")
+    .select("quantity, variation_id, products(id, category, shipping_price), product_variations(id, product_id, price, discounted_price)")
     .eq("cart_id", cart.id);
 
   if (itemsError) {
@@ -315,8 +315,22 @@ export const applyCouponForCheckout = asyncHandler(async (req, res) => {
     throw new Error("Cart is empty");
   }
 
+  const resolveUnitPrice = (variation = {}) => {
+    const price = Number(variation.price || 0);
+    const discounted = variation.discounted_price == null ? null : Number(variation.discounted_price);
+    if (Number.isFinite(discounted) && discounted > 0 && discounted < price) {
+      return discounted;
+    }
+    return price;
+  };
+
   const itemSnapshots = rows.map((row) => {
-    const unitPrice = Number(row.products?.discount_price ?? row.products?.price ?? 0);
+    if (!row.variation_id || !row.product_variations) {
+      res.status(400);
+      throw new Error("Cart items must include a selected variation");
+    }
+
+    const unitPrice = resolveUnitPrice(row.product_variations);
     const quantity = Number(row.quantity || 0);
     return {
       productId: row.products?.id,

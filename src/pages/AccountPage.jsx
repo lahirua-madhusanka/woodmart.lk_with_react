@@ -382,8 +382,8 @@ function AccountPage() {
       <h2 className="text-lg font-semibold text-ink">Cart</h2>
       <CartList
         items={cartDetailedItems}
-        onQuantityChange={(item, qty) => updateCartItem(item.productId, Math.max(1, qty))}
-        onRemove={(item) => removeFromCart(item.productId)}
+        onQuantityChange={(item, qty) => updateCartItem(item.productId, item.variationId, Math.max(1, qty))}
+        onRemove={(item) => removeFromCart(item.productId, item.variationId)}
         onCheckout={() => navigate("/checkout")}
       />
     </div>
