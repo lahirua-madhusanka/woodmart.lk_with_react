@@ -420,6 +420,43 @@ begin
 end;
 $$;
 
+-- Variation-only system: relax legacy NOT NULL constraints so the new variation-only
+-- insert path works on databases that were created from the original schema.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'product_variations'
+      and column_name = 'variation_name' and is_nullable = 'NO'
+  ) then
+    alter table public.product_variations alter column variation_name drop not null;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products'
+      and column_name = 'price' and is_nullable = 'NO'
+  ) then
+    alter table public.products alter column price drop not null;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products'
+      and column_name = 'stock' and is_nullable = 'NO'
+  ) then
+    alter table public.products alter column stock drop not null;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products'
+      and column_name = 'product_cost' and is_nullable = 'NO'
+  ) then
+    alter table public.products alter column product_cost drop not null;
+  end if;
+end $$;
+
 create index if not exists idx_product_variations_product on public.product_variations(product_id);
 create unique index if not exists idx_product_variations_sku_unique on public.product_variations(sku) where sku is not null;
 

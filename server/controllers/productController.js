@@ -134,6 +134,43 @@ const isMissingVariationSellingColumnError = (message = "") => {
   );
 };
 
+// Production may still have NOT NULL on legacy `variation_name` column.
+const isLegacyVariationNameNotNullError = (message = "") => {
+  const lowered = String(message || "").toLowerCase();
+  return lowered.includes("variation_name") && lowered.includes("null");
+};
+
+// Production may still have NOT NULL on legacy `products.price` / stock / cost / discount_price / sku.
+const isLegacyProductColumnNotNullError = (message = "") => {
+  const lowered = String(message || "").toLowerCase();
+  if (!lowered.includes("null")) return false;
+  return ["\"price\"", "\"stock\"", "\"product_cost\""].some((token) => lowered.includes(token));
+};
+
+// Derive legacy product columns from variations so older schemas accept inserts.
+const summarizeVariationsForLegacyProduct = (variations = []) => {
+  if (!variations.length) {
+    return { price: 0, discount_price: null, product_cost: 0, stock: 0, sku: null };
+  }
+  const minPrice = variations.reduce((acc, v) => Math.min(acc, Number(v?.price ?? 0)), Infinity);
+  const minCost = variations.reduce((acc, v) => Math.min(acc, Number(v?.cost ?? 0)), Infinity);
+  const totalStock = variations.reduce((acc, v) => acc + Number(v?.stock ?? 0), 0);
+  const minDiscount = variations.reduce((acc, v) => {
+    const dp = v?.discountedPrice;
+    if (dp == null) return acc;
+    const num = Number(dp);
+    if (!Number.isFinite(num)) return acc;
+    return acc == null ? num : Math.min(acc, num);
+  }, null);
+  return {
+    price: Number.isFinite(minPrice) ? minPrice : 0,
+    discount_price: minDiscount,
+    product_cost: Number.isFinite(minCost) ? minCost : 0,
+    stock: totalStock,
+    sku: variations.find((v) => v?.sku)?.sku || null,
+  };
+};
+
 const productSelectV2 =
   "id, name, description, shipping_price, category, rating, brand, featured, status, created_at, updated_at, product_images(image_url, sort_order), product_variations(id, name, price, discounted_price, cost, stock, sku, image_url, sort_order), product_reviews(id, user_id, name, title, rating, comment, order_id, created_at, updated_at)";
 
@@ -177,6 +214,9 @@ const loadProductRowById = async (id) => {
 const insertProductVariations = async ({ productId, variations }) => {
   if (!variations.length) return;
 
+  // eslint-disable-next-line no-console
+  console.log("[insertProductVariations] saving", variations.length, "variations for product", productId);
+
   const variationRowsV2 = variations.map((variation) => ({
     product_id: productId,
     name: variation.name,
@@ -190,6 +230,12 @@ const insertProductVariations = async ({ productId, variations }) => {
   }));
 
   let { error } = await supabase.from("product_variations").insert(variationRowsV2);
+
+  // Legacy NOT NULL on variation_name -> retry with both columns populated.
+  if (error && isLegacyVariationNameNotNullError(error.message)) {
+    const dualRows = variationRowsV2.map((row) => ({ ...row, variation_name: row.name }));
+    ({ error } = await supabase.from("product_variations").insert(dualRows));
+  }
 
   if (error && isMissingVariationSellingColumnError(error.message)) {
     const legacyRows = variations.map((variation) => ({
@@ -234,8 +280,13 @@ const insertProductVariations = async ({ productId, variations }) => {
   }
 
   if (error) {
+    // eslint-disable-next-line no-console
+    console.error("[insertProductVariations] FAILED:", error.message, { productId });
     throw new Error(error.message);
   }
+
+  // eslint-disable-next-line no-console
+  console.log("[insertProductVariations] inserted", variations.length, "rows OK");
 };
 
 export const getReviewEligibility = asyncHandler(async (req, res) => {
@@ -354,7 +405,14 @@ export const getProducts = asyncHandler(async (req, res) => {
   }
 
   // eslint-disable-next-line no-console
-  console.log("Products API result:", products);
+  console.log(
+    "[getProducts] returning",
+    products.length,
+    "products; with-variations:",
+    products.filter((p) => Array.isArray(p.variations) && p.variations.length).length,
+    "; sample variation count:",
+    products[0]?.variations?.length || 0
+  );
 
   res.json(products);
 });
@@ -379,6 +437,15 @@ export const getProductById = asyncHandler(async (req, res) => {
 });
 
 export const createProduct = asyncHandler(async (req, res) => {
+  // eslint-disable-next-line no-console
+  console.log("[createProduct] Incoming product data:", {
+    name: req.body?.name,
+    category: req.body?.category,
+    images: Array.isArray(req.body?.images) ? req.body.images.length : 0,
+    variations: Array.isArray(req.body?.variations) ? req.body.variations.length : 0,
+    variationsPreview: Array.isArray(req.body?.variations) ? req.body.variations : null,
+  });
+
   const {
     name,
     description,
@@ -466,6 +533,7 @@ export const createProduct = asyncHandler(async (req, res) => {
     throw new Error("Variation SKU values must be unique");
   }
 
+  const legacyMirror = summarizeVariationsForLegacyProduct(normalizedVariations);
   const insertPayload = {
     name,
     description,
@@ -475,6 +543,12 @@ export const createProduct = asyncHandler(async (req, res) => {
     brand: brand || "",
     featured: Boolean(featured),
     status: status || "active",
+    // Mirror legacy NOT NULL columns from variations so older production schemas accept the row.
+    price: legacyMirror.price,
+    discount_price: legacyMirror.discount_price,
+    product_cost: legacyMirror.product_cost,
+    stock: legacyMirror.stock,
+    sku: legacyMirror.sku,
   };
 
   let { data: created, error: createError } = await supabase
@@ -483,6 +557,22 @@ export const createProduct = asyncHandler(async (req, res) => {
     .select("id")
     .single();
 
+  // Modern schemas may not have these legacy columns -> drop them and retry.
+  if (createError && isMissingColumnError(createError.message)) {
+    const fallback = { ...insertPayload };
+    delete fallback.price;
+    delete fallback.discount_price;
+    delete fallback.product_cost;
+    delete fallback.stock;
+    delete fallback.sku;
+    ({ data: created, error: createError } = await supabase
+      .from("products")
+      .insert(fallback)
+      .select("id")
+      .single());
+  }
+
+  // Very old schemas may also reject brand/featured/status/shipping_price.
   if (createError && isMissingColumnError(createError.message)) {
     ({ data: created, error: createError } = await supabase
       .from("products")
@@ -491,6 +581,9 @@ export const createProduct = asyncHandler(async (req, res) => {
         description,
         category,
         rating,
+        price: legacyMirror.price,
+        product_cost: legacyMirror.product_cost,
+        stock: legacyMirror.stock,
       })
       .select("id")
       .single());
@@ -627,11 +720,28 @@ export const updateProduct = asyncHandler(async (req, res) => {
     }
   }
 
+  // Mirror legacy NOT NULL product columns from incoming variations (when provided).
+  const legacyMirrorUpdate = normalizedVariations
+    ? summarizeVariationsForLegacyProduct(normalizedVariations)
+    : null;
+
   let { error: updateError } = await supabase
     .from("products")
-    .update(payload)
+    .update({
+      ...payload,
+      ...(legacyMirrorUpdate
+        ? {
+            price: legacyMirrorUpdate.price,
+            discount_price: legacyMirrorUpdate.discount_price,
+            product_cost: legacyMirrorUpdate.product_cost,
+            stock: legacyMirrorUpdate.stock,
+            sku: legacyMirrorUpdate.sku,
+          }
+        : {}),
+    })
     .eq("id", req.params.id);
 
+  // Modern schema doesn't have these legacy columns -> retry without them.
   if (updateError && isMissingColumnError(updateError.message)) {
     const fallbackPayload = { ...payload };
     delete fallbackPayload.brand;
